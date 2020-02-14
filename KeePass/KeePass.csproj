@@ -10,7 +10,7 @@
     <RootNamespace>KeePass</RootNamespace>
     <AssemblyName>KeePass</AssemblyName>
     <ApplicationIcon>KeePass.ico</ApplicationIcon>
-    <SignAssembly>true</SignAssembly>
+    <SignAssembly>false</SignAssembly>
     <AssemblyOriginatorKeyFile>KeePass.pfx</AssemblyOriginatorKeyFile>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
@@ -658,9 +658,7 @@
     <Compile Include="Forms\MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="Forms\MainForm_Events.cs">
-      <SubType>Form</SubType>
-    </Compile>
+    <Compile Include="Forms\MainForm_Events.cs" />
     <Compile Include="Forms\MainForm_Functions.cs">
       <SubType>Form</SubType>
     </Compile>
