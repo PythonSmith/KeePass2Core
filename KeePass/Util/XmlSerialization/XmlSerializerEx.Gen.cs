@@ -3,8 +3,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Xml;
 using System.Diagnostics;
+using System.Xml;
 
 using KeePassLib.Interfaces;
 
@@ -220,6 +220,9 @@ namespace KeePass.Util.XmlSerialization
 					case "UseTransactedFileWrites":
 						o.UseTransactedFileWrites = ReadBoolean(xr);
 						break;
+					case "UseTransactedConfigWrites":
+						o.UseTransactedConfigWrites = ReadBoolean(xr);
+						break;
 					case "FileTxExtra":
 						o.FileTxExtra = ReadBoolean(xr);
 						break;
@@ -240,6 +243,9 @@ namespace KeePass.Util.XmlSerialization
 						break;
 					case "PluginCachePath":
 						o.PluginCachePath = ReadString(xr);
+						break;
+					case "PluginCompatibility":
+						o.PluginCompatibility = ReadListOfString(xr);
 						break;
 					case "ExpirySoonDays":
 						o.ExpirySoonDays = ReadInt32(xr);
@@ -343,6 +349,9 @@ namespace KeePass.Util.XmlSerialization
 						break;
 					case "EscMinimizesToTray":
 						o.EscMinimizesToTray = ReadBoolean(xr);
+						break;
+					case "EscAction":
+						o.EscAction = ReadAceEscAction(xr);
 						break;
 					case "MinimizeToTray":
 						o.MinimizeToTray = ReadBoolean(xr);
@@ -606,6 +615,9 @@ namespace KeePass.Util.XmlSerialization
 					case "ClipboardClearAfterSeconds":
 						o.ClipboardClearAfterSeconds = ReadInt32(xr);
 						break;
+					case "ClipboardNoPersist":
+						o.ClipboardNoPersist = ReadBoolean(xr);
+						break;
 					case "UseClipboardViewerIgnoreFormat":
 						o.UseClipboardViewerIgnoreFormat = ReadBoolean(xr);
 						break;
@@ -799,6 +811,9 @@ namespace KeePass.Util.XmlSerialization
 				{
 					case "HotKeyGlobalAutoType":
 						o.HotKeyGlobalAutoType = ReadUInt64(xr);
+						break;
+					case "HotKeyGlobalAutoTypePassword":
+						o.HotKeyGlobalAutoTypePassword = ReadUInt64(xr);
 						break;
 					case "HotKeySelectedAutoType":
 						o.HotKeySelectedAutoType = ReadUInt64(xr);
@@ -1340,6 +1355,33 @@ namespace KeePass.Util.XmlSerialization
 			return o;
 		}
 
+		private static System.Collections.Generic.List<System.String> ReadListOfString(XmlReader xr)
+		{
+			System.Collections.Generic.List<System.String> o = new System.Collections.Generic.List<System.String>();
+
+			if(SkipEmptyElement(xr)) return o;
+
+			Debug.Assert(xr.NodeType == XmlNodeType.Element);
+			xr.ReadStartElement();
+			xr.MoveToContent();
+
+			while(true)
+			{
+				XmlNodeType nt = xr.NodeType;
+				if((nt == XmlNodeType.EndElement) || (nt == XmlNodeType.None)) break;
+				if(nt != XmlNodeType.Element) { Debug.Assert(false); continue; }
+
+				System.String oElem = ReadString(xr);
+				o.Add(oElem);
+
+				xr.MoveToContent();
+			}
+
+			Debug.Assert(xr.NodeType == XmlNodeType.EndElement);
+			xr.ReadEndElement();
+			return o;
+		}
+
 		private static System.Int32 ReadInt32(XmlReader xr)
 		{
 			string strValue = xr.ReadElementString();
@@ -1359,6 +1401,26 @@ namespace KeePass.Util.XmlSerialization
 			string strValue = xr.ReadElementString();
 			KeePass.App.Configuration.AceMainWindowLayout eResult;
 			if(!m_dictAceMainWindowLayout.TryGetValue(strValue, out eResult))
+				{ Debug.Assert(false); }
+			return eResult;
+		}
+
+		private static Dictionary<string, KeePass.App.Configuration.AceEscAction> m_dictAceEscAction = null;
+		private static KeePass.App.Configuration.AceEscAction ReadAceEscAction(XmlReader xr)
+		{
+			if(m_dictAceEscAction == null)
+			{
+				m_dictAceEscAction = new Dictionary<string, KeePass.App.Configuration.AceEscAction>();
+				m_dictAceEscAction["None"] = KeePass.App.Configuration.AceEscAction.None;
+				m_dictAceEscAction["Lock"] = KeePass.App.Configuration.AceEscAction.Lock;
+				m_dictAceEscAction["Minimize"] = KeePass.App.Configuration.AceEscAction.Minimize;
+				m_dictAceEscAction["MinimizeToTray"] = KeePass.App.Configuration.AceEscAction.MinimizeToTray;
+				m_dictAceEscAction["Exit"] = KeePass.App.Configuration.AceEscAction.Exit;
+			}
+
+			string strValue = xr.ReadElementString();
+			KeePass.App.Configuration.AceEscAction eResult;
+			if(!m_dictAceEscAction.TryGetValue(strValue, out eResult))
 				{ Debug.Assert(false); }
 			return eResult;
 		}
@@ -1560,8 +1622,8 @@ namespace KeePass.Util.XmlSerialization
 
 				switch(xr.LocalName)
 				{
-					case "ShowOnlyIfTrayed":
-						o.ShowOnlyIfTrayed = ReadBoolean(xr);
+					case "ShowOnlyIfTrayedEx":
+						o.ShowOnlyIfTrayedEx = ReadBoolean(xr);
 						break;
 					case "GrayIcon":
 						o.GrayIcon = ReadBoolean(xr);
@@ -1601,6 +1663,9 @@ namespace KeePass.Util.XmlSerialization
 
 				switch(xr.LocalName)
 				{
+					case "RememberHidingPasswordsMain":
+						o.RememberHidingPasswordsMain = ReadBoolean(xr);
+						break;
 					case "SeparateHidingSettings":
 						o.SeparateHidingSettings = ReadBoolean(xr);
 						break;
@@ -1869,6 +1934,9 @@ namespace KeePass.Util.XmlSerialization
 					case "MinimumQuality":
 						o.MinimumQuality = ReadUInt32(xr);
 						break;
+					case "RememberWhileOpen":
+						o.RememberWhileOpen = ReadBoolean(xr);
+						break;
 					default:
 						Debug.Assert(false);
 						xr.Skip();
@@ -2038,6 +2106,9 @@ namespace KeePass.Util.XmlSerialization
 					case "SearchInUuids":
 						o.SearchInUuids = ReadBoolean(xr);
 						break;
+					case "SearchInGroupPaths":
+						o.SearchInGroupPaths = ReadBoolean(xr);
+						break;
 					case "SearchInGroupNames":
 						o.SearchInGroupNames = ReadBoolean(xr);
 						break;
@@ -2123,33 +2194,6 @@ namespace KeePass.Util.XmlSerialization
 						xr.Skip();
 						break;
 				}
-
-				xr.MoveToContent();
-			}
-
-			Debug.Assert(xr.NodeType == XmlNodeType.EndElement);
-			xr.ReadEndElement();
-			return o;
-		}
-
-		private static System.Collections.Generic.List<System.String> ReadListOfString(XmlReader xr)
-		{
-			System.Collections.Generic.List<System.String> o = new System.Collections.Generic.List<System.String>();
-
-			if(SkipEmptyElement(xr)) return o;
-
-			Debug.Assert(xr.NodeType == XmlNodeType.Element);
-			xr.ReadStartElement();
-			xr.MoveToContent();
-
-			while(true)
-			{
-				XmlNodeType nt = xr.NodeType;
-				if((nt == XmlNodeType.EndElement) || (nt == XmlNodeType.None)) break;
-				if(nt != XmlNodeType.Element) { Debug.Assert(false); continue; }
-
-				System.String oElem = ReadString(xr);
-				o.Add(oElem);
 
 				xr.MoveToContent();
 			}

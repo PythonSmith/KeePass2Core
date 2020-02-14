@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -51,7 +51,7 @@ namespace KeePass.Forms
 		private string m_strInitialFormRect = string.Empty;
 		private bool m_bSetForeground = false;
 		private uint m_uCharCount = 0;
-		private bool? m_bInitHide = null;
+		private bool? m_obInitHide = null;
 		private int m_nBannerWidth = -1;
 
 		private Font m_fontChars = null;
@@ -108,7 +108,7 @@ namespace KeePass.Forms
 		/// <param name="uCharCount">Number of characters to pick. Specify
 		/// 0 to allow picking a variable amount of characters.</param>
 		public void InitEx(ProtectedString psWord, bool bCenterScreen,
-			bool bSetForeground, uint uCharCount, bool? bInitHide)
+			bool bSetForeground, uint uCharCount, bool? obInitHide)
 		{
 			m_psWord = psWord;
 
@@ -116,13 +116,17 @@ namespace KeePass.Forms
 
 			m_bSetForeground = bSetForeground;
 			m_uCharCount = uCharCount;
-			m_bInitHide = bInitHide;
+			m_obInitHide = obInitHide;
 		}
 
 		private void OnFormLoad(object sender, EventArgs e)
 		{
-			Debug.Assert(m_psWord != null);
-			if(m_psWord == null) throw new InvalidOperationException();
+			if(m_psWord == null) { Debug.Assert(false); throw new InvalidOperationException(); }
+
+			// The password text box should not be focused by default
+			// in order to avoid a Caps Lock warning tooltip bug;
+			// https://sourceforge.net/p/keepass/bugs/1807/
+			Debug.Assert((m_pnlBottom.TabIndex == 0) && !m_tbSelected.Focused);
 
 			m_bFormLoaded = false;
 
@@ -145,7 +149,7 @@ namespace KeePass.Forms
 
 			AceColumn colPw = Program.Config.MainWindow.FindColumn(AceColumnType.Password);
 			bool bHide = ((colPw != null) ? colPw.HideWithAsterisks : true);
-			if(m_bInitHide.HasValue) bHide = m_bInitHide.Value;
+			if(m_obInitHide.HasValue) bHide = m_obInitHide.Value;
 			bHide |= !AppPolicy.Current.UnhidePasswords;
 			m_cbHideChars.Checked = bHide;
 
@@ -163,8 +167,12 @@ namespace KeePass.Forms
 				this.Activate();
 			}
 
-			UIUtil.SetFocus(m_tbSelected, this);
 			m_bFormLoaded = true;
+		}
+
+		private void OnFormShown(object sender, EventArgs e)
+		{
+			UIUtil.ResetFocus(m_tbSelected, this, m_bSetForeground);
 		}
 
 		private void OnFormClosed(object sender, FormClosedEventArgs e)

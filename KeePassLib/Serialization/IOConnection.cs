@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -263,11 +263,11 @@ namespace KeePassLib.Serialization
 #endif
 
 		// Web request methods
-		public const string WrmDeleteFile = "DELETEFILE";
-		public const string WrmMoveFile = "MOVEFILE";
+		public static readonly string WrmDeleteFile = "DELETEFILE";
+		public static readonly string WrmMoveFile = "MOVEFILE";
 
 		// Web request headers
-		public const string WrhMoveFileTo = "MoveFileTo";
+		public static readonly string WrhMoveFileTo = "MoveFileTo";
 
 		public static event EventHandler<IOAccessEventArgs> IOAccessPre;
 
@@ -726,13 +726,15 @@ namespace KeePassLib.Serialization
 			WebRequest req = CreateWebRequest(iocFrom);
 			if(req != null)
 			{
+				string strToCnc = UrlUtil.GetCanonicalUri(iocTo.Path);
+
 				if(IsHttpWebRequest(req))
 				{
 #if KeePassUAP
 					throw new NotSupportedException();
 #else
 					req.Method = "MOVE";
-					req.Headers.Set("Destination", iocTo.Path); // Full URL supported
+					req.Headers.Set("Destination", strToCnc); // Full URL supported
 #endif
 				}
 				else if(IsFtpWebRequest(req))
@@ -741,13 +743,13 @@ namespace KeePassLib.Serialization
 					throw new NotSupportedException();
 #else
 					req.Method = WebRequestMethods.Ftp.Rename;
-					string strTo = UrlUtil.GetFileName(iocTo.Path);
+					string strToName = UrlUtil.GetFileName(strToCnc);
 
 					// We're affected by .NET bug 621450:
 					// https://connect.microsoft.com/VisualStudio/feedback/details/621450/problem-renaming-file-on-ftp-server-using-ftpwebrequest-in-net-framework-4-0-vs2010-only
 					// Prepending "./", "%2E/" or "Dummy/../" doesn't work.
 
-					((FtpWebRequest)req).RenameTo = strTo;
+					((FtpWebRequest)req).RenameTo = strToName;
 #endif
 				}
 				else if(IsFileWebRequest(req))
@@ -762,7 +764,7 @@ namespace KeePassLib.Serialization
 					throw new NotSupportedException();
 #else
 					req.Method = WrmMoveFile;
-					req.Headers.Set(WrhMoveFileTo, iocTo.Path);
+					req.Headers.Set(WrhMoveFileTo, strToCnc);
 #endif
 				}
 
@@ -820,24 +822,14 @@ namespace KeePassLib.Serialization
 
 		public static byte[] ReadFile(IOConnectionInfo ioc)
 		{
-			Stream sIn = null;
-			MemoryStream ms = null;
 			try
 			{
-				sIn = IOConnection.OpenRead(ioc);
-				if(sIn == null) return null;
-
-				ms = new MemoryStream();
-				MemUtil.CopyStream(sIn, ms);
-
-				return ms.ToArray();
+				using(Stream s = IOConnection.OpenRead(ioc))
+				{
+					return MemUtil.Read(s);
+				}
 			}
-			catch(Exception) { }
-			finally
-			{
-				if(sIn != null) sIn.Close();
-				if(ms != null) ms.Close();
-			}
+			catch(Exception) { Debug.Assert(false); }
 
 			return null;
 		}

@@ -1,4 +1,4 @@
-﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="3.5">
+﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="Current">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -10,11 +10,11 @@
     <RootNamespace>KeePass</RootNamespace>
     <AssemblyName>KeePass</AssemblyName>
     <ApplicationIcon>KeePass.ico</ApplicationIcon>
-    <SignAssembly>true</SignAssembly>
+    <SignAssembly>false</SignAssembly>
     <!--<AssemblyOriginatorKeyFile>KeePass.pfx</AssemblyOriginatorKeyFile>-->
     <FileUpgradeFlags>
     </FileUpgradeFlags>
-    <OldToolsVersion>2.0</OldToolsVersion>
+    <OldToolsVersion>3.5</OldToolsVersion>
     <UpgradeBackupLocation>
     </UpgradeBackupLocation>
   </PropertyGroup>
@@ -99,6 +99,9 @@
     </Compile>
     <Compile Include="..\KeePassLib\Cryptography\CryptoRandomStream.cs">
       <Link>KeePassLib\Cryptography\CryptoRandomStream.cs</Link>
+    </Compile>
+    <Compile Include="..\KeePassLib\Cryptography\CryptoStreamEx.cs">
+      <Link>KeePassLib\Cryptography\CryptoStreamEx.cs</Link>
     </Compile>
     <Compile Include="..\KeePassLib\Cryptography\CryptoUtil.cs">
       <Link>KeePassLib\Cryptography\CryptoUtil.cs</Link>
@@ -228,6 +231,9 @@
     </Compile>
     <Compile Include="..\KeePassLib\Native\NativeMethods.Unix.cs">
       <Link>KeePassLib\Native\NativeMethods.Unix.cs</Link>
+    </Compile>
+    <Compile Include="..\KeePassLib\Native\SimpleStat.cs">
+      <Link>KeePassLib\Native\SimpleStat.cs</Link>
     </Compile>
     <Compile Include="..\KeePassLib\PwCustomIcon.cs">
       <Link>KeePassLib\PwCustomIcon.cs</Link>
@@ -386,6 +392,7 @@
     <Compile Include="DataExchange\FileFormatProvider.cs" />
     <Compile Include="DataExchange\Formats\AmpXml250.cs" />
     <Compile Include="DataExchange\Formats\AnyPwCsv144.cs" />
+    <Compile Include="DataExchange\Formats\BitwardenJson112.cs" />
     <Compile Include="DataExchange\Formats\ChromeCsv66.cs" />
     <Compile Include="DataExchange\Formats\CodeWalletTxt605.cs" />
     <Compile Include="DataExchange\Formats\DashlaneCsv2.cs" />
@@ -417,7 +424,8 @@
     <Compile Include="DataExchange\Formats\PinsTxt450.cs" />
     <Compile Include="DataExchange\Formats\PpKeeperHtml270.cs" />
     <Compile Include="DataExchange\Formats\PVaultTxt14.cs" />
-    <Compile Include="DataExchange\Formats\PwAgentXml234.cs" />
+    <Compile Include="DataExchange\Formats\PwAgentXml2.cs" />
+    <Compile Include="DataExchange\Formats\PwAgentXml3.cs" />
     <Compile Include="DataExchange\Formats\PwDepotXml26.cs" />
     <Compile Include="DataExchange\Formats\PwExporterXml105.cs" />
     <Compile Include="DataExchange\Formats\PwKeeperCsv70.cs" />
@@ -433,8 +441,10 @@
     <Compile Include="DataExchange\Formats\SecurityTxt12.cs" />
     <Compile Include="DataExchange\Formats\Spamex20070328.cs" />
     <Compile Include="DataExchange\Formats\SplashIdCsv402.cs" />
-    <Compile Include="DataExchange\Formats\SteganosPwManager2007.cs" />
+    <Compile Include="DataExchange\Formats\SteganosCsv20.cs" />
+    <Compile Include="DataExchange\Formats\SteganosUI2007.cs" />
     <Compile Include="DataExchange\Formats\StickyPwXml50.cs" />
+    <Compile Include="DataExchange\Formats\TrueKeyCsv4.cs" />
     <Compile Include="DataExchange\Formats\TurboPwsCsv5.cs" />
     <Compile Include="DataExchange\Formats\VisKeeperTxt3.cs" />
     <Compile Include="DataExchange\Formats\Whisper32Csv116.cs" />
@@ -445,7 +455,7 @@
     <Compile Include="DataExchange\GxiImporter.cs" />
     <Compile Include="DataExchange\GxiProfile.cs" />
     <Compile Include="DataExchange\ImportUtil.cs" />
-    <Compile Include="DataExchange\Json.cs" />
+    <Compile Include="DataExchange\JsonObject.cs" />
     <Compile Include="DataExchange\KdbFile.cs" />
     <Compile Include="DataExchange\KdbManager.cs" />
     <Compile Include="DataExchange\PwExportInfo.cs" />
@@ -648,9 +658,7 @@
     <Compile Include="Forms\MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="Forms\MainForm_Events.cs">
-      <SubType>Form</SubType>
-    </Compile>
+    <Compile Include="Forms\MainForm_Events.cs" />
     <Compile Include="Forms\MainForm_Functions.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -773,6 +781,7 @@
     <Compile Include="Plugins\PlgxCsprojLoader.cs" />
     <Compile Include="Plugins\PlgxPluginInfo.cs" />
     <Compile Include="Plugins\PlgxPlugin.cs" />
+    <Compile Include="Resources\KPRes.cs" />
     <Compile Include="Resources\KPRes.Generated.cs" />
     <Compile Include="UI\AsyncPwListUpdate.cs" />
     <Compile Include="UI\BackgroundForm.cs">
@@ -822,6 +831,7 @@
     <Compile Include="UI\ListViewGroupingMenu.cs" />
     <Compile Include="UI\ListViewSortMenu.cs" />
     <Compile Include="UI\ListViewStateEx.cs" />
+    <Compile Include="UI\MenuItemLinks.cs" />
     <Compile Include="UI\NotifyIconEx.cs" />
     <Compile Include="UI\OnDemandStatusDialog.cs" />
     <Compile Include="UI\OpenWithMenu.cs" />
@@ -1081,6 +1091,7 @@
     <Compile Include="Util\ClipboardEventChainBlocker.cs" />
     <Compile Include="Util\ClipboardUtil.cs" />
     <Compile Include="Util\ClipboardUtil.Unix.cs" />
+    <Compile Include="Util\ClipboardUtil.Uwp.cs" />
     <Compile Include="Util\ClipboardUtil.Windows.cs" />
     <Compile Include="Util\CommandLineArgs.cs" />
     <Compile Include="Ecas\EcasActionType.cs" />
@@ -1106,6 +1117,7 @@
     <Compile Include="Util\EntryMenu.cs" />
     <Compile Include="Util\EntryTemplates.cs" />
     <Compile Include="Util\EntryUtil.cs" />
+    <Compile Include="Util\FileSearchEx.cs" />
     <Compile Include="Util\GlobalMutexPool.cs" />
     <Compile Include="Util\IniFile.cs" />
     <Compile Include="Util\IpcBroadcast.cs" />
@@ -1263,6 +1275,9 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="KeePass.ico" />
+    <None Include="Resources\Images\B16x16_Imp_TrueKey.png" />
+    <None Include="Resources\Images\B16x16_Imp_Steganos20.png" />
+    <None Include="Resources\Images\B16x16_Imp_Bitwarden.png" />
     <None Include="Resources\Images\B16x16_Imp_Chrome.png" />
     <None Include="Resources\Images\B48x35_WritingHand.png" />
     <None Include="Resources\Icons\KeePass.ico" />

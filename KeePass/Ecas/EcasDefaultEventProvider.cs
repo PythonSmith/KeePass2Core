@@ -1,6 +1,6 @@
 ﻿/*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -43,6 +43,14 @@ namespace KeePass.Ecas
 		public static readonly PwUuid SavedDatabaseFile = new PwUuid(new byte[] {
 			0xB3, 0xA8, 0xFD, 0xFE, 0x78, 0x13, 0x4A, 0x6A,
 			0x9C, 0x5D, 0xD5, 0xBA, 0x84, 0x3A, 0x9B, 0x8E
+		});
+		public static readonly PwUuid SynchronizingDatabaseFile = new PwUuid(new byte[] {
+			0x06, 0x7E, 0x27, 0xA7, 0x20, 0xB0, 0x47, 0x71,
+			0x8F, 0x14, 0x68, 0xD5, 0x01, 0x5C, 0x76, 0x6A
+		});
+		public static readonly PwUuid SynchronizedDatabaseFile = new PwUuid(new byte[] {
+			0xB5, 0xA1, 0xE0, 0xD5, 0xA2, 0xF6, 0x44, 0xB3,
+			0x8A, 0xA1, 0x84, 0xC6, 0x86, 0xC2, 0xA9, 0x60
 		});
 		public static readonly PwUuid ClosingDatabaseFilePre = new PwUuid(new byte[] {
 			0x8C, 0xEA, 0xDE, 0x9A, 0xA8, 0x17, 0x49, 0x19,
@@ -113,6 +121,12 @@ namespace KeePass.Ecas
 				IsMatchIocDbEvent));
 			m_events.Add(new EcasEventType(EcasEventIDs.SavedDatabaseFile,
 				KPRes.SavedDatabaseFile, PwIcon.Disk, epFileFilter,
+				IsMatchIocDbEvent));
+			m_events.Add(new EcasEventType(EcasEventIDs.SynchronizingDatabaseFile,
+				KPRes.SynchronizingDatabaseFile, PwIcon.Disk, epFileFilter,
+				IsMatchIocDbEvent));
+			m_events.Add(new EcasEventType(EcasEventIDs.SynchronizedDatabaseFile,
+				KPRes.SynchronizedDatabaseFile, PwIcon.Disk, epFileFilter,
 				IsMatchIocDbEvent));
 			m_events.Add(new EcasEventType(EcasEventIDs.ClosingDatabaseFilePre,
 				KPRes.ClosingDatabaseFile + " (" + KPRes.SavingPre + ")",

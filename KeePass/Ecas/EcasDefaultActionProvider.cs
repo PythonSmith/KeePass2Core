@@ -1,6 +1,6 @@
 ﻿/*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -40,6 +40,8 @@ using KeePassLib.Delegates;
 using KeePassLib.Keys;
 using KeePassLib.Serialization;
 using KeePassLib.Utility;
+
+using NativeLib = KeePassLib.Native.NativeLib;
 
 namespace KeePass.Ecas
 {
@@ -273,11 +275,11 @@ namespace KeePass.Ecas
 				try { pe = Program.MainForm.GetSelectedEntry(false); }
 				catch(Exception) { Debug.Assert(false); }
 
-				strCmd = WinUtil.CompileUrl(strCmd, pe, true, null);
+				strCmd = WinUtil.CompileUrl(strCmd, pe, true, null, false);
 
-				ProcessStartInfo psi = new ProcessStartInfo(strCmd);
-				if(!string.IsNullOrEmpty(strArgs))
-					psi.Arguments = strArgs;
+				ProcessStartInfo psi = new ProcessStartInfo();
+				psi.FileName = strCmd;
+				if(!string.IsNullOrEmpty(strArgs)) psi.Arguments = strArgs;
 
 				bool bShEx = true;
 				if(!string.IsNullOrEmpty(strVerb)) { } // Need ShellExecute
@@ -306,7 +308,7 @@ namespace KeePass.Ecas
 				if(!string.IsNullOrEmpty(strVerb))
 					psi.Verb = strVerb;
 
-				p = Process.Start(psi);
+				p = NativeLib.StartProcessEx(psi);
 
 				if((p != null) && bWait)
 				{
@@ -613,7 +615,7 @@ namespace KeePass.Ecas
 				PwDatabase pd = Program.MainForm.DocumentManager.SafeFindContainerOf(pe);
 
 				IntPtr hFg = NativeMethods.GetForegroundWindowHandle();
-				if(AutoType.IsOwnWindow(hFg))
+				if(GlobalWindowManager.HasWindowMW(hFg))
 					AutoType.PerformIntoPreviousWindow(Program.MainForm, pe,
 						pd, strSeq);
 				else AutoType.PerformIntoCurrentWindow(pe, pd, strSeq);

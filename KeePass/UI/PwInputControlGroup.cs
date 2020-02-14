@@ -1,6 +1,6 @@
 ﻿/*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -202,19 +202,6 @@ namespace KeePass.UI
 			m_tbPassword.Enabled = m_bEnabled;
 			m_cbHide.Enabled = (m_bEnabled && ((uFlags &
 				(ulong)AceKeyUIFlags.DisableHidePassword) == 0));
-
-			if((uFlags & (ulong)AceKeyUIFlags.CheckHidePassword) != 0)
-			{
-				++m_uPrgmCheck;
-				m_cbHide.Checked = true;
-				--m_uPrgmCheck;
-			}
-			if((uFlags & (ulong)AceKeyUIFlags.UncheckHidePassword) != 0)
-			{
-				++m_uPrgmCheck;
-				m_cbHide.Checked = false;
-				--m_uPrgmCheck;
-			}
 
 			bool bAutoRepeat = this.AutoRepeat;
 			if(bAutoRepeat && (m_tbRepeat.TextLength > 0))
@@ -499,8 +486,8 @@ namespace KeePass.UI
 			{
 				bool bUnknown = (m_bSprVar && !m_pbQuality.Enabled);
 
-				string strBits = (bUnknown ? "?" : uBits.ToString()) +
-					" " + KPRes.BitsStc;
+				string strBits = KPRes.BitsEx.Replace(@"{PARAM}",
+					(bUnknown ? "?" : uBits.ToString()));
 				m_pbQuality.ProgressText = (bUnknown ? string.Empty : strBits);
 
 				int iPos = (int)((100 * uBits) / (256 / 2));

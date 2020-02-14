@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -18,15 +18,15 @@
 */
 
 using System;
-using System.Text;
-using System.Security;
-using System.Runtime.InteropServices;
-using System.Windows.Forms;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Security;
+using System.Text;
+using System.Windows.Forms;
 
 using KeePass.UI;
 using KeePass.Util;
@@ -41,12 +41,47 @@ namespace KeePass.Native
 	{
 		internal static string GetWindowText(IntPtr hWnd, bool bTrim)
 		{
-			int nLength = GetWindowTextLength(hWnd);
-			if(nLength <= 0) return string.Empty;
+			// cc may be greater than the actual length;
+			// https://docs.microsoft.com/en-us/windows/desktop/api/winuser/nf-winuser-getwindowtextlengthw
+			int cc = GetWindowTextLength(hWnd);
+			if(cc <= 0) return string.Empty;
 
-			StringBuilder sb = new StringBuilder(nLength + 1);
-			GetWindowText(hWnd, sb, sb.Capacity);
-			string strWindow = sb.ToString();
+			// StringBuilder sb = new StringBuilder(cc + 2);
+			// int ccReal = GetWindowText(hWnd, sb, cc + 1);
+			// if(ccReal <= 0) { Debug.Assert(false); return string.Empty; }
+			// // The text isn't always NULL-terminated; trim garbage
+			// if(ccReal < sb.Length)
+			//	sb.Remove(ccReal, sb.Length - ccReal);
+			// string strWindow = sb.ToString();
+
+			string strWindow;
+			IntPtr p = IntPtr.Zero;
+			try
+			{
+				int cbChar = Marshal.SystemDefaultCharSize;
+				int cb = (cc + 2) * cbChar;
+				p = Marshal.AllocCoTaskMem(cb);
+				if(p == IntPtr.Zero) { Debug.Assert(false); return string.Empty; }
+
+				byte[] pbZero = new byte[cb];
+				Marshal.Copy(pbZero, 0, p, cb);
+
+				int ccReal = GetWindowText(hWnd, p, cc + 1);
+				if(ccReal <= 0) { Debug.Assert(false); return string.Empty; }
+
+				if(ccReal <= cc)
+				{
+					// Ensure correct termination (in case GetWindowText
+					// copied too much)
+					int ibZero = ccReal * cbChar;
+					for(int i = 0; i < cbChar; ++i)
+						Marshal.WriteByte(p, ibZero + i, 0);
+				}
+				else { Debug.Assert(false); return string.Empty; }
+
+				strWindow = (Marshal.PtrToStringAuto(p) ?? string.Empty);
+			}
+			finally { if(p != IntPtr.Zero) Marshal.FreeCoTaskMem(p); }
 
 			return (bTrim ? strWindow.Trim() : strWindow);
 		}
@@ -176,36 +211,37 @@ namespace KeePass.Native
 			return IntPtr.Zero;
 		}
 
-		internal static bool LoseFocus(Form fCurrent)
+		internal static bool LoseFocus(Form fCurrent, bool bSkipOwnWindows)
 		{
-			if(NativeLib.IsUnix())
-				return LoseFocusUnix(fCurrent);
+			if(NativeLib.IsUnix()) return LoseFocusUnix(fCurrent);
 
 			try
 			{
-				IntPtr hCurrentWnd = ((fCurrent != null) ? fCurrent.Handle : IntPtr.Zero);
-				IntPtr hWnd = GetWindow(hCurrentWnd, GW_HWNDNEXT);
+				IntPtr hWnd = ((fCurrent != null) ? fCurrent.Handle : IntPtr.Zero);
 
 				while(true)
 				{
-					if(hWnd != hCurrentWnd)
-					{
-						int nStyle = GetWindowStyle(hWnd);
-						if(((nStyle & WS_VISIBLE) != 0) &&
-							(GetWindowTextLength(hWnd) > 0))
-						{
-							// Skip the taskbar window (required for Windows 7,
-							// when the target window is the only other window
-							// in the taskbar)
-							if(!IsTaskBar(hWnd)) break;
-						}
-					}
-
+					IntPtr hWndPrev = hWnd;
 					hWnd = GetWindow(hWnd, GW_HWNDNEXT);
-					if(hWnd == IntPtr.Zero) break;
-				}
 
-				if(hWnd == IntPtr.Zero) return false;
+					if(hWnd == IntPtr.Zero) return false;
+					if(hWnd == hWndPrev) { Debug.Assert(false); return false; }
+
+					int nStyle = GetWindowStyle(hWnd);
+					if((nStyle & WS_VISIBLE) == 0) continue;
+
+					if(GetWindowTextLength(hWnd) == 0) continue;
+
+					if(bSkipOwnWindows && GlobalWindowManager.HasWindowMW(hWnd))
+						continue;
+
+					// Skip the taskbar window (required for Windows 7,
+					// when the target window is the only other window
+					// in the taskbar)
+					if(IsTaskBar(hWnd)) continue;
+
+					break;
+				}
 
 				Debug.Assert(GetWindowText(hWnd, true) != "Start");
 				return EnsureForegroundWindow(hWnd);
@@ -663,10 +699,7 @@ namespace KeePass.Native
 					return true;
 				}
 			}
-			finally
-			{
-				Marshal.FreeCoTaskMem(pBuf);
-			}
+			finally { Marshal.FreeCoTaskMem(pBuf); }
 
 			Debug.Assert(false);
 			return false;
@@ -707,8 +740,23 @@ namespace KeePass.Native
 		{
 			if(m.Msg == NativeMethods.WM_KEYDOWN) return true;
 			if(m.Msg == NativeMethods.WM_KEYUP) return false;
+			if(m.Msg == NativeMethods.WM_SYSKEYDOWN) return true;
+			if(m.Msg == NativeMethods.WM_SYSKEYUP) return false;
 			return null;
 		}
+
+		/* internal static string GetKeyboardLayoutNameEx()
+		{
+			StringBuilder sb = new StringBuilder(KL_NAMELENGTH + 1);
+			if(GetKeyboardLayoutName(sb))
+			{
+				Debug.Assert(sb.Length == (KL_NAMELENGTH - 1));
+				return sb.ToString();
+			}
+			else { Debug.Assert(false); }
+
+			return null;
+		} */
 
 		/// <summary>
 		/// PRIMARYLANGID macro.

@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -36,7 +36,9 @@ using KeePassLib.Cryptography.Cipher;
 using KeePassLib.Cryptography.KeyDerivation;
 using KeePassLib.Delegates;
 using KeePassLib.Keys;
+using KeePassLib.Resources;
 using KeePassLib.Security;
+using KeePassLib.Serialization;
 using KeePassLib.Utility;
 
 namespace KeePass.Forms
@@ -87,9 +89,14 @@ namespace KeePass.Forms
 
 			GlobalWindowManager.AddWindow(this);
 
+			IOConnectionInfo ioc = m_pwDatabase.IOConnectionInfo;
+			string strDisp = ioc.GetDisplayName();
+
+			string strDesc = KPRes.DatabaseSettingsDesc;
+			if(!string.IsNullOrEmpty(strDisp)) strDesc = strDisp;
+
 			BannerFactory.CreateBannerEx(this, m_bannerImage,
-				Properties.Resources.B48x48_Ark, KPRes.DatabaseSettings,
-				KPRes.DatabaseSettingsDesc);
+				Properties.Resources.B48x48_Ark, KPRes.DatabaseSettings, strDesc);
 			this.Icon = AppIcons.Default;
 
 			FontUtil.AssignDefaultItalic(m_lblHeaderCpAlgo);
@@ -174,6 +181,7 @@ namespace KeePass.Forms
 
 			m_bInitializing = false;
 			EnableControlsEx();
+			UIUtil.SetFocus(m_tbDbName, this);
 		}
 
 		private void InitRecycleBinTab()
@@ -288,7 +296,7 @@ namespace KeePass.Forms
 		{
 			m_pwDatabase.SettingsChanged = DateTime.UtcNow;
 
-			if(!m_tbDbName.Text.Equals(m_pwDatabase.Name))
+			if(m_tbDbName.Text != m_pwDatabase.Name)
 			{
 				m_pwDatabase.Name = m_tbDbName.Text;
 				m_pwDatabase.NameChanged = DateTime.UtcNow;
@@ -297,13 +305,13 @@ namespace KeePass.Forms
 			string strNew = m_tbDbDesc.Text;
 			string strOrgFlt = StrUtil.NormalizeNewLines(m_pwDatabase.Description, false);
 			string strNewFlt = StrUtil.NormalizeNewLines(strNew, false);
-			if(!strNewFlt.Equals(strOrgFlt))
+			if(strNewFlt != strOrgFlt)
 			{
 				m_pwDatabase.Description = strNew;
 				m_pwDatabase.DescriptionChanged = DateTime.UtcNow;
 			}
 
-			if(!m_tbDefaultUser.Text.Equals(m_pwDatabase.DefaultUserName))
+			if(m_tbDefaultUser.Text != m_pwDatabase.DefaultUserName)
 			{
 				m_pwDatabase.DefaultUserName = m_tbDefaultUser.Text;
 				m_pwDatabase.DefaultUserNameChanged = DateTime.UtcNow;
@@ -848,7 +856,7 @@ namespace KeePass.Forms
 
 		private void KdfTestTh(object o)
 		{
-			string strMsg = KPRes.UnknownError;
+			string strMsg = KLRes.UnknownError;
 
 			try
 			{

@@ -1,8 +1,9 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 	<meta http-equiv="expires" content="0" />
 	<meta http-equiv="cache-control" content="no-cache" />
 	<meta http-equiv="pragma" content="no-cache" />
@@ -17,7 +18,7 @@
 	<meta name="DC.type" content="Text" />
 	<meta name="DC.format" content="text/html" />
 	<meta name="DC.language" content="en" />
-	<meta name="DC.rights" content="Copyright (C) 2003-2018 Dominik Reichl" />
+	<meta name="DC.rights" content="Copyright (C) 2003-2020 Dominik Reichl" />
 
 	<meta name="robots" content="index, follow" />
 	<meta name="flattr:id" content="42rykv" />
@@ -32,12 +33,11 @@
 
 
 
-<table class="sectionsummary"><tr><td width="68">
-<img src="../images/b64x64_winprops.png" width="64" height="64"
-class="singleimg" align="left" alt="Trigger" />
-</td><td valign="middle"><h1>Triggers</h1><br />
-Automate workflows using the trigger system.
-</td></tr></table>
+<table class="sectionheader"><tr>
+<td><img src="../images/b64x64_winprops.png" alt="Trigger" /></td>
+<td><h1>Triggers</h1>
+<p>Automate workflows using the trigger system.</p></td>
+</tr></table>
 
 <ul>
 <li><a href="#intro">Trigger System Introduction</a></li>
@@ -50,9 +50,8 @@ Automate workflows using the trigger system.
 <br />
 
 <a name="intro"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_make_kdevelop.png" class="singleimg" alt="Triggers" />&nbsp;&nbsp;Trigger
-System Introduction</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_make_kdevelop.png" alt="Trigger" />
+Trigger System Introduction</h2>
 
 <p>KeePass features a powerful event-condition-action trigger system.
 With this system, workflows can be automated. For example, you could define
@@ -78,7 +77,20 @@ to define a complex state-dependent system of triggers.</p>
 <a href="../base/placeholders.html">placeholders</a>
 (except state-changing ones), environment variables, etc. can be used.</p>
 
-<p><strong>IO Connection Properties.</strong>
+<p><strong>Sensitive Data.</strong><br />
+Some trigger events/conditions/actions support fields for potentially
+sensitive data (for instance the password field of the 'Open database file'
+action). As triggers are saved in a plain text
+<a href="../base/configuration.html">configuration</a> file,
+it is generally not recommended to directly enter sensitive data in trigger fields.
+If a database is open when the trigger runs, the sensitive data can be
+stored in the database and the trigger field can point to the data using
+a <a href="../base/fieldrefs.html">field reference</a>
+(which KeePass resolves when evaluating the field).
+In this way, only the field reference appears in the configuration file
+and the actual sensitive data is stored in the encrypted database file.</p>
+
+<p><strong>IO Connection Properties.</strong><br />
 Most trigger actions having a file path/URL parameter only allow
 specifying the path/URL and possibly credentials (user name and password)
 for accessing the file; advanced connection properties (like
@@ -93,8 +105,8 @@ from the corresponding item (same path/URL) in the 'Open Recent' file list.</p>
 <br />
 
 <a name="events"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_make_kdevelop.png" class="singleimg" alt="Triggers" />&nbsp;&nbsp;Events</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_make_kdevelop.png" alt="Trigger" />
+Events</h2>
 
 <ul class="withspc">
 
@@ -138,6 +150,20 @@ This event occurs right before a database file is saved.
 
 <li><b>Saved database file:</b><br />
 This event occurs right after a database file has been saved successfully.
+<ul>
+<li><i>Parameters:</i> See 'Opened database file' event.</li>
+</ul></li>
+
+<li><b>Synchronizing database file:</b><br />
+This event occurs right before a database file is synchronized
+with another database file.
+<ul>
+<li><i>Parameters:</i> See 'Opened database file' event.</li>
+</ul></li>
+
+<li><b>Synchronized database file:</b><br />
+This event occurs right after a database file has been synchronized
+with another database file.
 <ul>
 <li><i>Parameters:</i> See 'Opened database file' event.</li>
 </ul></li>
@@ -188,7 +214,7 @@ pass for the next event.</li>
 
 <li><b>Custom toolbar button clicked:</b><br />
 This event occurs when the user clicks a custom toolbar button. Custom
-toolbar buttons can be added using the 'Add custom toolbar button'
+toolbar buttons can be created using the 'Add custom toolbar button'
 trigger action.
 <ul>
 <li><i>ID:</i> ID of the toolbar button that must have been clicked (see action).</li>
@@ -199,8 +225,8 @@ trigger action.
 <br />
 
 <a name="conditions"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_make_kdevelop.png" class="singleimg" alt="Triggers" />&nbsp;&nbsp;Conditions</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_make_kdevelop.png" alt="Trigger" />
+Conditions</h2>
 
 <ul class="withspc">
 
@@ -241,8 +267,8 @@ Evaluates to true, if the specified database has unsaved changes.
 <br />
 
 <a name="actions"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_make_kdevelop.png" class="singleimg" alt="Triggers" />&nbsp;&nbsp;Actions</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_make_kdevelop.png" alt="Trigger" />
+Actions</h2>
 
 <ul class="withspc">
 
@@ -281,7 +307,7 @@ the current one.</li>
 Open a KDBX database file (in a new tab). If the given database file is opened
 already, KeePass brings it to the foreground.
 <ul>
-<li><i>File/URL:</i> Path of the database file to open. If it is an URL,
+<li><i>File/URL:</i> Path of the database file to open. If it is a URL,
 the protocol (prefix) must be specified.</li>
 <li><i>IO Connection - User Name / Password:</i> Optional credentials that are used
 for connecting to the target file system (for example FTP account user name /
@@ -302,7 +328,7 @@ use the 'Active database has unsaved changes' trigger condition.
 Synchronize the currently opened and active database with a file.
 <ul>
 <li><i>File/URL:</i> Path of the database file to synchronize with.
-If it is an URL, the protocol (prefix) must be specified.</li>
+If it is a URL, the protocol (prefix) must be specified.</li>
 <li><i>IO Connection - User Name / Password:</i> Optional credentials that are used
 for connecting to the target file system (for example FTP account user name /
 password). These credentials are not used to decrypt the database.</li>
@@ -312,7 +338,7 @@ password). These credentials are not used to decrypt the database.</li>
 Import a file into the currently opened and active database.
 <ul>
 <li><i>File/URL:</i> Path of the source file to import.
-If it is an URL, the protocol (prefix) must be specified.</li>
+If it is a URL, the protocol (prefix) must be specified.</li>
 <li><i>File format:</i> Specifies the import format (see the import
 dialog for possible values).</li>
 <li><i>Method:</i> Specifies the behavior for groups/entries that exist
@@ -327,7 +353,7 @@ shows a key prompt dialog.</li>
 Export the currently opened and active database to a file.
 <ul>
 <li><i>File/URL:</i> Path of the target file to export to.
-If it is an URL, the protocol (prefix) must be specified.</li>
+If it is a URL, the protocol (prefix) must be specified.</li>
 <li><i>File format:</i> Specifies the export format (see the export
 dialog for possible values).</li>
 <li><i>Filter - Group:</i> Specifies the path of the group to export
@@ -421,8 +447,8 @@ Remove a custom button from the toolbar in the main window.
 <br />
 
 <a name="examples"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_make_kdevelop.png" class="singleimg" alt="Triggers" />&nbsp;&nbsp;Examples</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_make_kdevelop.png" alt="Trigger" />
+Examples</h2>
 
 <p>See the <a href="https://keepass.info/help/kb/trigger_examples.html"
 target="_blank">Trigger Examples</a> page.</p>
