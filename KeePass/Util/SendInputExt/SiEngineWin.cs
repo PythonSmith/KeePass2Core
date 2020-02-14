@@ -1,6 +1,6 @@
 ﻿/*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -19,11 +19,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Windows.Forms;
-using System.Runtime.InteropServices;
-using System.Threading;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Windows.Forms;
 
 using KeePass.Native;
 
@@ -33,9 +33,6 @@ namespace KeePass.Util.SendInputExt
 {
 	internal sealed class SiEngineWin : SiEngineStd
 	{
-		private static Dictionary<string, SiSendMethod> g_dProcessSendMethods =
-			new Dictionary<string, SiSendMethod>();
-
 		private IntPtr m_hklOriginal = IntPtr.Zero;
 		private IntPtr m_hklCurrent = IntPtr.Zero;
 
@@ -61,7 +58,6 @@ namespace KeePass.Util.SendInputExt
 
 			try
 			{
-				InitProcessSendMethods();
 				InitForEnv();
 
 				// Do not use SendKeys.Flush here, use Application.DoEvents
@@ -92,8 +88,7 @@ namespace KeePass.Util.SendInputExt
 						// hot key, as a workaround for applications
 						// with broken time-dependent message processing;
 						// https://sourceforge.net/p/keepass/bugs/1213/
-						Thread.Sleep(1);
-						Application.DoEvents();
+						SleepAndDoEvents(1);
 					}
 				}
 
@@ -104,8 +99,7 @@ namespace KeePass.Util.SendInputExt
 					// the actual sequence, as a workaround for applications
 					// with broken time-dependent message processing;
 					// https://sourceforge.net/p/keepass/bugs/1213/
-					Thread.Sleep(1);
-					Application.DoEvents();
+					SleepAndDoEvents(1);
 				}
 			}
 			catch(Exception) { Debug.Assert(false); }
@@ -175,18 +169,31 @@ namespace KeePass.Util.SendInputExt
 			SetKeyModifierImplEx(kMod, bDown, false);
 		}
 
-		private void SetKeyModifierImplEx(Keys kMod, bool bDown, bool bRAlt)
+		private void SetKeyModifierImplEx(Keys kMod, bool bDown, bool bForChar)
 		{
 			PrepareSend();
 
-			if((kMod & Keys.Shift) != Keys.None)
-				SendVKeyNative((int)Keys.ShiftKey, null, bDown);
-			if((kMod & Keys.Control) != Keys.None)
-				SendVKeyNative((int)Keys.ControlKey, null, bDown);
-			if((kMod & Keys.Alt) != Keys.None)
+			bool bShift = ((kMod & Keys.Shift) != Keys.None);
+			bool bCtrl = ((kMod & Keys.Control) != Keys.None);
+			bool bAlt = ((kMod & Keys.Alt) != Keys.None);
+
+			if(bShift)
+				SendVKeyNative((int)Keys.LShiftKey, null, bDown);
+			if(bCtrl && bAlt && bForChar)
 			{
-				int vk = (int)(bRAlt ? Keys.RMenu : Keys.Menu);
-				SendVKeyNative(vk, null, bDown);
+				if(!m_swiCurrent.CharsRAltAsCtrlAlt)
+					SendVKeyNative((int)Keys.LControlKey, null, bDown);
+
+				// Send RAlt for better AltGr compatibility;
+				// https://sourceforge.net/p/keepass/bugs/1475/
+				SendVKeyNative((int)Keys.RMenu, null, bDown);
+			}
+			else
+			{
+				if(bCtrl)
+					SendVKeyNative((int)Keys.LControlKey, null, bDown);
+				if(bAlt)
+					SendVKeyNative((int)Keys.LMenu, null, bDown);
 			}
 
 			if(bDown) m_kModCur |= kMod;
@@ -209,46 +216,6 @@ namespace KeePass.Util.SendInputExt
 			SendCharNative(ch, false);
 		}
 
-		private static void InitProcessSendMethods()
-		{
-			Dictionary<string, SiSendMethod> d = g_dProcessSendMethods;
-			if(d.Count > 0) return; // Init once is sufficient
-
-			string[] vEnfUni = new string[] {
-				"PuTTY",
-				"KiTTY", "KiTTY_Portable", "KiTTY_NoTrans", "KiTTY_NoHyperlink",
-				"KiTTY_NoCompress",
-				"PuTTYjp",
-				// "mRemoteNG", // No effect
-				// "PuTTYNG", // No effect
-
-				// SuperPuTTY spawns PuTTY processes whose windows are
-				// displayed embedded in the SuperPuTTY window (without
-				// window borders), thus the definition "PuTTY" also
-				// fixes SuperPuTTY; no "SuperPuTTY" required
-				// "SuperPuTTY",
-
-				"MinTTY" // Cygwin window "~"
-			};
-			foreach(string strEnfUni in vEnfUni)
-			{
-				d[strEnfUni] = SiSendMethod.UnicodePacket;
-			}
-
-			string[] vEnfKey = new string[] {
-				"MSTSC", // Remote Desktop Connection client
-				"VirtualBox", // VirtualBox does not support VK_PACKET
-				"VpxClient" // VMware vSphere client
-
-				// https://sourceforge.net/p/keepass/discussion/329220/thread/b77448e4/
-				// "vmware-vmx" // VMware Workstation 14 (?)
-			};
-			foreach(string strEnfKey in vEnfKey)
-			{
-				d[strEnfKey] = SiSendMethod.KeyEvent;
-			}
-		}
-
 		private void InitForEnv()
 		{
 #if DEBUG
@@ -268,12 +235,12 @@ namespace KeePass.Util.SendInputExt
 
 					try
 					{
-						string strName = GetProcessName(p);
+						string strName = SiWindowInfo.GetProcessName(p);
 
 						// If the Neo keyboard layout is being used, we must
 						// send Unicode characters; keypresses are converted
 						// and thus do not lead to the expected result
-						if(ProcessNameMatches(strName, "Neo20"))
+						if(SiWindowInfo.ProcessNameMatches(strName, "Neo20"))
 						{
 							FileVersionInfo fvi = p.MainModule.FileVersionInfo;
 							if(((fvi.ProductName ?? string.Empty).Trim().Length == 0) &&
@@ -281,7 +248,7 @@ namespace KeePass.Util.SendInputExt
 								m_osmEnforced = SiSendMethod.UnicodePacket;
 							else { Debug.Assert(false); }
 						}
-						else if(ProcessNameMatches(strName, "KbdNeo_Ahk"))
+						else if(SiWindowInfo.ProcessNameMatches(strName, "KbdNeo_Ahk"))
 							m_osmEnforced = SiSendMethod.UnicodePacket;
 					}
 					catch(Exception) { Debug.Assert(false); }
@@ -641,28 +608,41 @@ namespace KeePass.Util.SendInputExt
 					return false;
 			}
 
+			bool bShift = ((kMod & Keys.Shift) != Keys.None);
+			bool bCtrl = ((kMod & Keys.Control) != Keys.None);
+			bool bAlt = ((kMod & Keys.Alt) != Keys.None);
+			bool bCapsLock = false;
+
 			// Windows' GetKeyboardState function does not return the
 			// current virtual key array (especially not after changing
 			// them below), thus we build the array on our own
 			byte[] pbState = new byte[256];
-			if((kMod & Keys.Shift) != Keys.None)
+			if(bShift)
 			{
 				pbState[NativeMethods.VK_SHIFT] = 0x80;
 				pbState[NativeMethods.VK_LSHIFT] = 0x80;
 			}
-			if((kMod & Keys.Control) != Keys.None)
+			if(bCtrl && bAlt) // Use LCtrl+RAlt as Ctrl+Alt
 			{
 				pbState[NativeMethods.VK_CONTROL] = 0x80;
 				pbState[NativeMethods.VK_LCONTROL] = 0x80;
-			}
-			if((kMod & Keys.Alt) != Keys.None)
-			{
 				pbState[NativeMethods.VK_MENU] = 0x80;
-				pbState[NativeMethods.VK_RMENU] = 0x80; // See below
+				pbState[NativeMethods.VK_RMENU] = 0x80;
+			}
+			else
+			{
+				if(bCtrl)
+				{
+					pbState[NativeMethods.VK_CONTROL] = 0x80;
+					pbState[NativeMethods.VK_LCONTROL] = 0x80;
+				}
+				if(bAlt)
+				{
+					pbState[NativeMethods.VK_MENU] = 0x80;
+					pbState[NativeMethods.VK_LMENU] = 0x80;
+				}
 			}
 			pbState[NativeMethods.VK_NUMLOCK] = 0x01; // Toggled
-
-			bool bCapsLock = false;
 
 			// The keypress that VkKeyScan returns may require a specific
 			// state of toggle keys, on which it provides no information;
@@ -692,38 +672,29 @@ namespace KeePass.Util.SendInputExt
 				bCapsLock = true;
 			}
 
-			if(bCapsLock)
-			{
-				SendKeyImpl(NativeMethods.VK_CAPITAL, null, null);
-				Thread.Sleep(1);
-				Application.DoEvents();
-			}
-
 			Keys kModDiff = (kMod & ~m_kModCur);
+			bool bSleep = (bCapsLock || (kModDiff != Keys.None));
+			int msSleep = m_swiCurrent.SleepAroundKeyMod;
+
+			if(bCapsLock)
+				SendKeyImpl(NativeMethods.VK_CAPITAL, null, null);
+
 			if(kModDiff != Keys.None)
-			{
-				// Send RAlt for better AltGr compatibility;
-				// https://sourceforge.net/p/keepass/bugs/1475/
 				SetKeyModifierImplEx(kModDiff, true, true);
-				Thread.Sleep(1);
-				Application.DoEvents();
-			}
+
+			if(bSleep) SleepAndDoEvents(msSleep);
 
 			SendKeyImpl(vKey, null, bDown);
 
+			if(bSleep) SleepAndDoEvents(msSleep);
+
 			if(kModDiff != Keys.None)
-			{
-				Thread.Sleep(1);
-				Application.DoEvents();
 				SetKeyModifierImplEx(kModDiff, false, true);
-			}
 
 			if(bCapsLock)
-			{
-				Thread.Sleep(1);
-				Application.DoEvents();
 				SendKeyImpl(NativeMethods.VK_CAPITAL, null, null);
-			}
+
+			if(bSleep) SleepAndDoEvents(msSleep);
 
 			return true;
 		}
@@ -741,48 +712,6 @@ namespace KeePass.Util.SendInputExt
 			if(m_dWindowInfos.TryGetValue(hWnd, out swi)) return swi;
 
 			swi = new SiWindowInfo(hWnd);
-
-			Process p = null;
-			try
-			{
-				uint uPID;
-				uint uTID = NativeMethods.GetWindowThreadProcessId(hWnd, out uPID);
-
-				swi.KeyboardLayout = NativeMethods.GetKeyboardLayout(uTID);
-
-				p = Process.GetProcessById((int)uPID);
-				string strName = GetProcessName(p);
-
-				foreach(KeyValuePair<string, SiSendMethod> kvp in g_dProcessSendMethods)
-				{
-					if(ProcessNameMatches(strName, kvp.Key))
-					{
-						swi.SendMethod = kvp.Value;
-						break;
-					}
-				}
-
-				// The workaround attempt for Edge below doesn't work;
-				// Edge simply ignores Unicode packets for '@', Euro sign, etc.
-				/* if(swi.SendMethod == SiSendMethod.Default)
-				{
-					string strTitle = NativeMethods.GetWindowText(hWnd, true);
-
-					// Workaround for Edge;
-					// https://sourceforge.net/p/keepass/discussion/329220/thread/fd3a6776/
-					// The window title is:
-					// Page name + Space + U+200E (left-to-right mark) + "- Microsoft Edge"
-					if(strTitle.EndsWith("- Microsoft Edge", StrUtil.CaseIgnoreCmp))
-						swi.SendMethod = SiSendMethod.UnicodePacket;
-				} */
-			}
-			catch(Exception) { Debug.Assert(false); }
-			finally
-			{
-				try { if(p != null) p.Dispose(); }
-				catch(Exception) { Debug.Assert(false); }
-			}
-
 			m_dWindowInfos[hWnd] = swi;
 			return swi;
 		}
@@ -811,30 +740,14 @@ namespace KeePass.Util.SendInputExt
 				}
 				m_hklCurrent = hklTarget;
 
-				Thread.Sleep(1);
-				Application.DoEvents();
+				SleepAndDoEvents(1);
 			}
 		}
 
-		private static string GetProcessName(Process p)
+		private static void SleepAndDoEvents(int msSleep)
 		{
-			if(p == null) { Debug.Assert(false); return string.Empty; }
-
-			try { return (p.ProcessName ?? string.Empty).Trim(); }
-			catch(Exception) { Debug.Assert(false); }
-			return string.Empty;
-		}
-
-		private static bool ProcessNameMatches(string strUnk, string strPattern)
-		{
-			if(strUnk == null) { Debug.Assert(false); return false; }
-			if(strPattern == null) { Debug.Assert(false); return false; }
-			Debug.Assert(strUnk.Trim() == strUnk);
-			Debug.Assert(strPattern.Trim() == strPattern);
-			Debug.Assert(!strPattern.EndsWith(".exe", StrUtil.CaseIgnoreCmp));
-
-			return (strUnk.Equals(strPattern, StrUtil.CaseIgnoreCmp) ||
-				strUnk.Equals(strPattern + ".exe", StrUtil.CaseIgnoreCmp));
+			if(msSleep >= 0) Thread.Sleep(msSleep);
+			Application.DoEvents();
 		}
 	}
 

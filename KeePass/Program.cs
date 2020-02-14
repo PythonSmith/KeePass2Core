@@ -1,6 +1,6 @@
 ﻿/*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -16,6 +16,11 @@
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
+
+// #define KP_DEVSNAP
+#if KP_DEVSNAP
+#warning KP_DEVSNAP is defined!
+#endif
 
 using System;
 using System.Collections;
@@ -83,28 +88,33 @@ namespace KeePass
 #if DEBUG
 		private static bool m_bDesignModeQueried = false;
 #endif
+		private static bool m_bEnableTranslation = true;
+
+#if KP_DEVSNAP
+		private static bool m_bAsmResReg = false;
+#endif
 
 		public enum AppMessage // int
 		{
 			Null = 0,
 			RestoreWindow = 1,
 			Exit = 2,
-			IpcByFile = 3,
+			IpcByFile = 3, // Handled by all other instances
 			AutoType = 4,
 			Lock = 5,
 			Unlock = 6,
-			AutoTypeSelected = 7
+			AutoTypeSelected = 7,
+			Cancel = 8,
+			AutoTypePassword = 9,
+			IpcByFile1 = 10 // Handled by 1 other instance
 		}
 
 		public static CommandLineArgs CommandLineArgs
 		{
 			get
 			{
-				if(m_cmdLineArgs == null)
-				{
-					Debug.Assert(false);
+				if(m_cmdLineArgs == null) // No assert (KeePass as library)
 					m_cmdLineArgs = new CommandLineArgs(null);
-				}
 
 				return m_cmdLineArgs;
 			}
@@ -227,6 +237,12 @@ namespace KeePass
 			}
 		}
 
+		public static bool EnableTranslation
+		{
+			get { return m_bEnableTranslation; }
+			set { m_bEnableTranslation = value; }
+		}
+
 		/// <summary>
 		/// Main entry point for the application.
 		/// </summary>
@@ -259,10 +275,14 @@ namespace KeePass
 			if(!string.IsNullOrEmpty(strWaDisable))
 				MonoWorkarounds.SetEnabled(strWaDisable, false);
 
-			DpiUtil.ConfigureProcess();
-			Application.EnableVisualStyles();
-			Application.SetCompatibleTextRenderingDefault(false);
-			Application.DoEvents(); // Required
+			try
+			{
+				DpiUtil.ConfigureProcess();
+				Application.EnableVisualStyles();
+				Application.SetCompatibleTextRenderingDefault(false);
+				Application.DoEvents(); // Required
+			}
+			catch(Exception) { Debug.Assert(MonoWorkarounds.IsRequired(106)); }
 
 #if DEBUG
 			string strInitialWorkDir = WinUtil.GetWorkingDirectory();
@@ -280,7 +300,7 @@ namespace KeePass
 			if(m_cmdLineArgs[AppDefs.CommandLineOptions.FileExtRegister] != null)
 			{
 				ShellUtil.RegisterExtension(AppDefs.FileExtension.FileExt, AppDefs.FileExtension.ExtId,
-					KPRes.FileExtName, WinUtil.GetExecutable(), PwDefs.ShortProductName, false);
+					KPRes.FileExtName2, WinUtil.GetExecutable(), PwDefs.ShortProductName, false);
 				MainCleanUp();
 				return;
 			}
@@ -348,6 +368,25 @@ namespace KeePass
 					File.WriteAllText(strFileOut, strContent);
 				}
 				catch(Exception) { Debug.Assert(false); }
+				MainCleanUp();
+				return;
+			}
+			if(m_cmdLineArgs[AppDefs.CommandLineOptions.ConfigAddUrlOverride] != null)
+			{
+				bool bAct = (m_cmdLineArgs[AppDefs.CommandLineOptions.Activate] != null);
+				Program.Config.Integration.UrlSchemeOverrides.AddCustomOverride(
+					m_cmdLineArgs[AppDefs.CommandLineOptions.Scheme],
+					m_cmdLineArgs[AppDefs.CommandLineOptions.Value], bAct, bAct);
+				AppConfigSerializer.Save(Program.Config);
+				MainCleanUp();
+				return;
+			}
+			if(m_cmdLineArgs[AppDefs.CommandLineOptions.ConfigRemoveUrlOverride] != null)
+			{
+				Program.Config.Integration.UrlSchemeOverrides.RemoveCustomOverride(
+					m_cmdLineArgs[AppDefs.CommandLineOptions.Scheme],
+					m_cmdLineArgs[AppDefs.CommandLineOptions.Value]);
+				AppConfigSerializer.Save(Program.Config);
 				MainCleanUp();
 				return;
 			}
@@ -434,6 +473,11 @@ namespace KeePass
 				BroadcastAppMessageAndCleanUp(AppMessage.AutoType);
 				return;
 			}
+			if(m_cmdLineArgs[AppDefs.CommandLineOptions.AutoTypePassword] != null)
+			{
+				BroadcastAppMessageAndCleanUp(AppMessage.AutoTypePassword);
+				return;
+			}
 			if(m_cmdLineArgs[AppDefs.CommandLineOptions.AutoTypeSelected] != null)
 			{
 				BroadcastAppMessageAndCleanUp(AppMessage.AutoTypeSelected);
@@ -446,7 +490,7 @@ namespace KeePass
 				{
 					IpcParamEx ipUrl = new IpcParamEx(IpcUtilEx.CmdOpenEntryUrl,
 						strEntryUuid, null, null, null, null);
-					IpcUtilEx.SendGlobalMessage(ipUrl);
+					IpcUtilEx.SendGlobalMessage(ipUrl, false);
 				}
 
 				MainCleanUp();
@@ -462,16 +506,25 @@ namespace KeePass
 				BroadcastAppMessageAndCleanUp(AppMessage.Unlock);
 				return;
 			}
-			if(m_cmdLineArgs[AppDefs.CommandLineOptions.IpcEvent] != null)
+			if(m_cmdLineArgs[AppDefs.CommandLineOptions.Cancel] != null)
 			{
-				string strName = m_cmdLineArgs[AppDefs.CommandLineOptions.IpcEvent];
-				if(!string.IsNullOrEmpty(strName))
+				BroadcastAppMessageAndCleanUp(AppMessage.Cancel);
+				return;
+			}
+
+			string strIpc = m_cmdLineArgs[AppDefs.CommandLineOptions.IpcEvent];
+			string strIpc1 = m_cmdLineArgs[AppDefs.CommandLineOptions.IpcEvent1];
+			if((strIpc != null) || (strIpc1 != null))
+			{
+				bool bIpc1 = (strIpc1 != null);
+				string strName = (bIpc1 ? strIpc1 : strIpc);
+				if(strName.Length != 0)
 				{
 					string[] vFlt = KeyUtil.MakeCtxIndependent(args);
 
-					IpcParamEx ipEvent = new IpcParamEx(IpcUtilEx.CmdIpcEvent, strName,
+					IpcParamEx ipcP = new IpcParamEx(IpcUtilEx.CmdIpcEvent, strName,
 						CommandLineArgs.SafeSerialize(vFlt), null, null, null);
-					IpcUtilEx.SendGlobalMessage(ipEvent);
+					IpcUtilEx.SendGlobalMessage(ipcP, bIpc1);
 				}
 
 				MainCleanUp();
@@ -543,14 +596,8 @@ namespace KeePass
 			InitEnvSecurity();
 			MonoWorkarounds.Initialize();
 
-			// try { NativeMethods.SetProcessDPIAware(); }
-			// catch(Exception) { }
-
 			// Do not run as AppX, because of compatibility problems
-			// (unless we're a special compatibility build)
-			if(WinUtil.IsAppX && !IsBuildType(
-				"CDE75CF0D4CA04D577A5A2E6BF5D19BFD5DDBBCF89D340FBBB0E4592C04496F1"))
-				return false;
+			if(WinUtil.IsAppX) return false;
 
 			try { SelfTest.TestFipsComplianceProblems(); }
 			catch(Exception exFips)
@@ -568,6 +615,7 @@ namespace KeePass
 				AppLogEx.Open(PwDefs.ShortProductName);
 
 			AppPolicy.Current = m_appConfig.Security.Policy.CloneDeep();
+			AppPolicy.ApplyToConfig();
 
 			if(m_appConfig.Security.ProtectProcessWithDacl)
 				KeePassLib.Native.NativeMethods.ProtectProcessWithDacl();
@@ -577,13 +625,19 @@ namespace KeePass
 			m_ecasTriggers = m_appConfig.Application.TriggerSystem;
 			m_ecasTriggers.SetToInitialState();
 
-			string strHelpFile = UrlUtil.StripExtension(WinUtil.GetExecutable()) + ".chm";
-			AppHelp.LocalHelpFile = strHelpFile;
-
 			// InitEnvWorkarounds();
 			LoadTranslation();
 
 			CustomResourceManager.Override(typeof(KeePass.Properties.Resources));
+
+#if KP_DEVSNAP
+			if(!m_bAsmResReg)
+			{
+				AppDomain.CurrentDomain.AssemblyResolve += Program.AssemblyResolve;
+				m_bAsmResReg = true;
+			}
+			else { Debug.Assert(false); }
+#endif
 
 			return true;
 		}
@@ -606,6 +660,15 @@ namespace KeePass
 
 			EnableThemingInScope.StaticDispose();
 			MonoWorkarounds.Terminate();
+
+#if KP_DEVSNAP
+			if(m_bAsmResReg)
+			{
+				AppDomain.CurrentDomain.AssemblyResolve -= Program.AssemblyResolve;
+				m_bAsmResReg = false;
+			}
+			else { Debug.Assert(false); }
+#endif
 		}
 
 		private static void MainCleanUp()
@@ -636,7 +699,17 @@ namespace KeePass
 				// Do not load libraries from the current working directory
 				if(!NativeMethods.SetDllDirectory(string.Empty)) { Debug.Assert(false); }
 			}
-			catch(Exception) { } // Throws on Unix and Windows < XP SP1
+			catch(Exception) { Debug.Assert(NativeLib.IsUnix()); }
+
+			try
+			{
+				if(NativeMethods.WerAddExcludedApplication(
+					AppDefs.FileNames.Program, false) < 0)
+				{
+					Debug.Assert(false);
+				}
+			}
+			catch(Exception) { Debug.Assert(NativeLib.IsUnix() || !WinUtil.IsAtLeastWindowsVista); }
 		}
 
 		// internal static Mutex TrySingleInstanceLock(string strName, bool bInitiallyOwned)
@@ -716,8 +789,7 @@ namespace KeePass
 
 					IpcParamEx ipcMsg = new IpcParamEx(IpcUtilEx.CmdOpenDatabase,
 						CommandLineArgs.SafeSerialize(vFlt), null, null, null, null);
-
-					IpcUtilEx.SendGlobalMessage(ipcMsg);
+					IpcUtilEx.SendGlobalMessage(ipcMsg, true);
 				}
 			}
 			catch(Exception) { Debug.Assert(false); }
@@ -757,6 +829,8 @@ namespace KeePass
 
 		private static void LoadTranslation()
 		{
+			if(!m_bEnableTranslation) return;
+
 			string strPath = m_appConfig.Application.GetLanguageFilePath();
 			if(string.IsNullOrEmpty(strPath)) return;
 
@@ -782,39 +856,28 @@ namespace KeePass
 			catch(Exception) { Debug.Assert(false); }
 		}
 
-		internal static bool IsDevelopmentSnapshot()
+		internal static bool IsStableAssembly()
 		{
 			try
 			{
-				Assembly asm = Assembly.GetExecutingAssembly();
+				Assembly asm = typeof(Program).Assembly;
 				byte[] pk = asm.GetName().GetPublicKeyToken();
 				string strPk = MemUtil.ByteArrayToHexString(pk);
-				return !strPk.Equals("fed2ed7716aecf5c", StrUtil.CaseIgnoreCmp);
+				Debug.Assert(string.IsNullOrEmpty(strPk) || (strPk.Length == 16));
+				return string.Equals(strPk, "fed2ed7716aecf5c", StrUtil.CaseIgnoreCmp);
 			}
 			catch(Exception) { Debug.Assert(false); }
 
 			return false;
 		}
 
-		private static bool IsBuildType(string str)
+		internal static bool IsDevelopmentSnapshot()
 		{
-			try
-			{
-				string strFile = UrlUtil.GetFileDirectory(WinUtil.GetExecutable(),
-					true, false) + "Application.ini";
-				if(!File.Exists(strFile)) return false;
-
-				IniFile f = IniFile.Read(strFile, StrUtil.Utf8);
-				string strType = f.Get("Application", "Type");
-				if(string.IsNullOrEmpty(strType)) return false;
-
-				byte[] pb = CryptoUtil.HashSha256(StrUtil.Utf8.GetBytes(strType.Trim()));
-				return string.Equals(MemUtil.ByteArrayToHexString(pb),
-					str, StrUtil.CaseIgnoreCmp);
-			}
-			catch(Exception) { Debug.Assert(false); }
-
-			return false;
+#if KP_DEVSNAP
+			return true;
+#else
+			return !IsStableAssembly();
+#endif
 		}
 
 		/* private static void InitEnvWorkarounds()
@@ -862,5 +925,31 @@ namespace KeePass
 			}
 			catch(Exception) { Debug.Assert(false); }
 		} */
+
+#if KP_DEVSNAP
+		private static Assembly AssemblyResolve(object sender, ResolveEventArgs e)
+		{
+			string str = ((e != null) ? e.Name : null);
+			if(string.IsNullOrEmpty(str)) { Debug.Assert(false); return null; }
+
+			try
+			{
+				AssemblyName n = new AssemblyName(str);
+				if(string.Equals(n.Name, "KeePass", StrUtil.CaseIgnoreCmp))
+					return typeof(KeePass.Program).Assembly;
+			}
+			catch(Exception)
+			{
+				Debug.Assert(false);
+
+				if(str.Equals("KeePass", StrUtil.CaseIgnoreCmp) ||
+					str.StartsWith("KeePass,", StrUtil.CaseIgnoreCmp))
+					return typeof(KeePass.Program).Assembly;
+			}
+
+			Debug.Assert(false);
+			return null;
+		}
+#endif
 	}
 }

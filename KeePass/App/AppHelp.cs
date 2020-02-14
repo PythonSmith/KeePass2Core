@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -20,11 +20,12 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Threading;
 
 using KeePass.Util;
+using KeePass.Util.Spr;
 
 using KeePassLib;
+using KeePassLib.Native;
 using KeePassLib.Utility;
 
 namespace KeePass.App
@@ -41,25 +42,35 @@ namespace KeePass.App
 	/// </summary>
 	public static class AppHelp
 	{
-		private static string m_strLocalHelpFile = null;
+		private static string g_strLocalHelpFile = null;
 
 		/// <summary>
-		/// Get/set the path of the local help file.
+		/// Get the path of the local help file.
 		/// </summary>
 		public static string LocalHelpFile
 		{
-			get { return m_strLocalHelpFile; }
-			set { m_strLocalHelpFile = value; }
+			get
+			{
+				if(g_strLocalHelpFile == null)
+					g_strLocalHelpFile = UrlUtil.StripExtension(
+						WinUtil.GetExecutable()) + ".chm";
+
+				return g_strLocalHelpFile;
+			}
 		}
 
 		public static bool LocalHelpAvailable
 		{
 			get
 			{
-				if(m_strLocalHelpFile == null) return false;
+				try
+				{
+					string strFile = AppHelp.LocalHelpFile;
+					if(!string.IsNullOrEmpty(strFile))
+						return File.Exists(strFile);
+				}
+				catch(Exception) { Debug.Assert(false); }
 
-				try { return File.Exists(m_strLocalHelpFile); }
-				catch(Exception) { }
 				return false;
 			}
 		}
@@ -68,7 +79,7 @@ namespace KeePass.App
 		{
 			get
 			{
-				return ((Program.Config.Application.HelpUseLocal) ?
+				return (Program.Config.Application.HelpUseLocal ?
 					AppHelpSource.Local : AppHelpSource.Online);
 			}
 
@@ -94,8 +105,8 @@ namespace KeePass.App
 		/// Show a help page.
 		/// </summary>
 		/// <param name="strTopic">Topic name. May be <c>null</c>.</param>
-		/// <param name="strSection">Section name. May be <c>null</c>. Must not start
-		/// with the '#' character.</param>
+		/// <param name="strSection">Section name. May be <c>null</c>.
+		/// Must not start with the '#' character.</param>
 		/// <param name="bPreferLocal">Specify if the local help file should be
 		/// preferred. If no local help file is available, the online help
 		/// system will be used, independent of the <c>bPreferLocal</c> flag.</param>
@@ -113,33 +124,74 @@ namespace KeePass.App
 
 		private static void ShowHelpLocal(string strTopic, string strSection)
 		{
-			Debug.Assert(m_strLocalHelpFile != null);
+			string strFile = AppHelp.LocalHelpFile;
+			if(string.IsNullOrEmpty(strFile)) { Debug.Assert(false); return; }
 
 			// Unblock CHM file for proper display of help contents
-			WinUtil.RemoveZoneIdentifier(m_strLocalHelpFile);
+			WinUtil.RemoveZoneIdentifier(strFile);
 
-			string strCmd = "\"ms-its:" + m_strLocalHelpFile;
-
-			if(strTopic != null)
+			string strCmd = "\"ms-its:" + strFile;
+			if(!string.IsNullOrEmpty(strTopic))
+			{
 				strCmd += "::/help/" + strTopic + ".html";
 
-			if(strSection != null)
-			{
-				Debug.Assert(strTopic != null); // Topic must be present for section
-				strCmd += "#" + strSection;
+				if(!string.IsNullOrEmpty(strSection))
+					strCmd += "#" + strSection;
 			}
-
 			strCmd += "\"";
 
+			if(ShowHelpLocalKcv(strCmd)) return;
+
+			string strDisp = strCmd;
 			try
 			{
-				Process p = Process.Start(WinUtil.LocateSystemApp("hh.exe"), strCmd);
-				if(p != null) p.Dispose();
+				if(NativeLib.IsUnix())
+					NativeLib.StartProcess(strCmd.Trim('\"'));
+				else // Windows
+				{
+					strDisp = "HH.exe " + strDisp;
+					NativeLib.StartProcess(WinUtil.LocateSystemApp(
+						"hh.exe"), strCmd);
+				}
 			}
 			catch(Exception ex)
 			{
-				MessageService.ShowWarning("HH.exe " + strCmd, ex);
+				MessageService.ShowWarning(strDisp, ex);
 			}
+		}
+
+		private static bool ShowHelpLocalKcv(string strQuotedMsIts)
+		{
+			try
+			{
+				if(!NativeLib.IsUnix()) return false;
+
+				string strApp = AppLocator.FindAppUnix("kchmviewer");
+				if(string.IsNullOrEmpty(strApp)) return false;
+
+				string strFile = StrUtil.GetStringBetween(strQuotedMsIts, 0, ":", "::");
+				if(string.IsNullOrEmpty(strFile))
+					strFile = StrUtil.GetStringBetween(strQuotedMsIts, 0, ":", "\"");
+				if(string.IsNullOrEmpty(strFile))
+				{
+					Debug.Assert(false);
+					return false;
+				}
+
+				string strUrl = StrUtil.GetStringBetween(strQuotedMsIts, 0, "::", "\"");
+
+				// https://www.ulduzsoft.com/linux/kchmviewer/kchmviewer-integration-reference/
+				string strArgs = "\"" + SprEncoding.EncodeForCommandLine(strFile) + "\"";
+				if(!string.IsNullOrEmpty(strUrl))
+					strArgs = "-showPage \"" + SprEncoding.EncodeForCommandLine(
+						strUrl) + "\" " + strArgs;
+
+				NativeLib.StartProcess(strApp, strArgs);
+				return true;
+			}
+			catch(Exception) { Debug.Assert(false); }
+
+			return false;
 		}
 
 		private static void ShowHelpOnline(string strTopic, string strSection)
@@ -152,11 +204,12 @@ namespace KeePass.App
 		{
 			string str = PwDefs.HelpUrl;
 
-			if(strTopic != null) str += strTopic + ".html";
-			if(strSection != null)
+			if(!string.IsNullOrEmpty(strTopic))
 			{
-				Debug.Assert(strTopic != null); // Topic must be present for section
-				str += "#" + strSection;
+				str += strTopic + ".html";
+
+				if(!string.IsNullOrEmpty(strSection))
+					str += "#" + strSection;
 			}
 
 			return str;

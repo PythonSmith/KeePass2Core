@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -398,9 +398,7 @@ namespace KeePass.Util
 					MessageService.NewLine + @"{" + strName + @"}");
 			}
 
-			uint uRepeat = 1;
-			if(ouParam.HasValue) uRepeat = ouParam.Value;
-
+			uint uRepeat = ouParam.GetValueOrDefault(1);
 			for(uint u = 0; u < uRepeat; ++u)
 			{
 				SiEvent si = new SiEvent();

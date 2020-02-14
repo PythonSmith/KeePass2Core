@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -124,7 +124,7 @@ namespace KeePass.UI
 			IntPtr pCF = IntPtr.Zero;
 			try
 			{
-				pCF = Marshal.AllocCoTaskMem(Marshal.SizeOf(cf));
+				pCF = Marshal.AllocCoTaskMem((int)cf.cbSize);
 				Marshal.StructureToPtr(cf, pCF, false);
 
 				IntPtr wParam = (IntPtr)NativeMethods.SCF_SELECTION;
@@ -134,7 +134,7 @@ namespace KeePass.UI
 				cf = (NativeMethods.CHARFORMAT2)Marshal.PtrToStructure(pCF,
 					typeof(NativeMethods.CHARFORMAT2));
 			}
-			catch(Exception) { Debug.Assert(NativeLib.IsUnix()); }
+			catch(Exception) { Debug.Assert(false); }
 			finally { if(pCF != IntPtr.Zero) Marshal.FreeCoTaskMem(pCF); }
 
 			return cf;
@@ -181,75 +181,101 @@ namespace KeePass.UI
 			return ((cf.dwEffects & NativeMethods.CFE_LINK) != 0);
 		}
 
-		public static void RtfLinkifyExtUrls(RichTextBox richTextBox, bool bResetSelection)
+		public static void RtfLinkifyExtUrls(RichTextBox rtb, bool bResetSelection)
 		{
+			if(rtb == null) { Debug.Assert(false); return; }
+
 			const string strProto = "cmd://";
 
 			try
 			{
-				string strText = richTextBox.Text;
+				string strText = (rtb.Text ?? string.Empty);
+				int iOffset = 0;
 
-				int nOffset = 0;
-				while(nOffset < strText.Length)
+				while(iOffset < strText.Length)
 				{
-					int nStart = strText.IndexOf(strProto, nOffset, StrUtil.CaseIgnoreCmp);
-					if(nStart < 0) break;
+					int i = strText.IndexOf(strProto, iOffset, StrUtil.CaseIgnoreCmp);
+					if(i < iOffset) break;
 
-					richTextBox.Select(nStart, UrlUtil.GetUrlLength(strText, nStart));
-					RtfSetSelectionLink(richTextBox);
+					int n = UrlUtil.GetUrlLength(strText, i);
+					if(n <= 0) { Debug.Assert(false); break; }
 
-					nOffset = nStart + 1;
+					rtb.Select(i, n);
+					RtfSetSelectionLink(rtb);
+
+					iOffset = i + n;
 				}
 
-				if(bResetSelection) richTextBox.Select(0, 0);
+				if(bResetSelection) rtb.Select(0, 0);
 			}
 			catch(Exception) { Debug.Assert(false); }
 		}
 
 		public static void RtfLinkifyText(RichTextBox rtb, string strLinkText,
-			bool bResetTempSelection)
+			bool bResetSelection)
 		{
-			if(rtb == null) throw new ArgumentNullException("rtb");
-			if(string.IsNullOrEmpty(strLinkText)) return; // No assert
+			RtfLinkifyText(rtb, strLinkText, bResetSelection, false);
+		}
+
+		public static void RtfLinkifyText(RichTextBox rtb, string strLinkText,
+			bool bResetSelection, bool bAll)
+		{
+			if(rtb == null) { Debug.Assert(false); return; }
 
 			try
 			{
-				string strText = rtb.Text;
-				int nStart = strText.IndexOf(strLinkText);
+				if(string.IsNullOrEmpty(strLinkText)) return; // No assert
 
-				if(nStart >= 0)
+				string strText = (rtb.Text ?? string.Empty);
+				int iOffset = 0;
+
+				while(iOffset < strText.Length)
 				{
-					rtb.Select(nStart, strLinkText.Length);
+					int i = strText.IndexOf(strLinkText, iOffset);
+					if(i < iOffset) break;
+
+					rtb.Select(i, strLinkText.Length);
 					RtfSetSelectionLink(rtb);
 
-					if(bResetTempSelection) rtb.Select(0, 0);
+					if(!bAll) break;
+					iOffset = i + strLinkText.Length;
 				}
 			}
 			catch(Exception) { Debug.Assert(false); }
+			finally
+			{
+				try { if(bResetSelection) rtb.Select(0, 0); }
+				catch(Exception) { Debug.Assert(false); }
+			}
 		}
 
-		public static void RtfLinkifyReferences(RichTextBox rtb,
-			bool bResetTempSelection)
+		public static void RtfLinkifyReferences(RichTextBox rtb, bool bResetSelection)
 		{
+			if(rtb == null) { Debug.Assert(false); return; }
+
 			try
 			{
-				string str = rtb.Text;
-
+				string str = (rtb.Text ?? string.Empty);
 				int iOffset = 0;
-				while(true)
+
+				while(iOffset < str.Length)
 				{
 					int iStart = str.IndexOf(SprEngine.StrRefStart, iOffset,
 						StrUtil.CaseIgnoreCmp);
-					if(iStart < 0) break;
+					if(iStart < iOffset) break;
 					int iEnd = str.IndexOf(SprEngine.StrRefEnd, iStart + 1,
 						StrUtil.CaseIgnoreCmp);
 					if(iEnd <= iStart) break;
 
-					string strRef = str.Substring(iStart, iEnd - iStart + 1);
-					RtfLinkifyText(rtb, strRef, bResetTempSelection);
+					string strRef = str.Substring(iStart, iEnd - iStart +
+						SprEngine.StrRefEnd.Length);
+					rtb.Select(iStart, strRef.Length);
+					RtfSetSelectionLink(rtb);
 
-					iOffset = iStart + 1;
+					iOffset = iStart + strRef.Length;
 				}
+
+				if(bResetSelection) rtb.Select(0, 0);
 			}
 			catch(Exception) { Debug.Assert(false); }
 		}
@@ -263,6 +289,47 @@ namespace KeePass.UI
 			cf.yHeight = (int)(fSizeInPt * 20.0f);
 
 			RtfSetCharFormat(rtb, cf);
+		}
+
+		internal static void RtfToggleSelectionFormat(RichTextBox rtb, FontStyle fs)
+		{
+			if(rtb == null) { Debug.Assert(false); return; }
+
+			try
+			{
+				Font f = rtb.SelectionFont;
+				if(f != null)
+					rtb.SelectionFont = new Font(f, f.Style ^ fs);
+				else
+				{
+					NativeMethods.CHARFORMAT2 cf = RtfGetCharFormat(rtb);
+					cf.dwMask = 0;
+
+					if((fs & FontStyle.Bold) == FontStyle.Bold)
+					{
+						cf.dwMask |= NativeMethods.CFM_BOLD;
+						cf.dwEffects ^= NativeMethods.CFE_BOLD;
+					}
+					if((fs & FontStyle.Italic) == FontStyle.Italic)
+					{
+						cf.dwMask |= NativeMethods.CFM_ITALIC;
+						cf.dwEffects ^= NativeMethods.CFE_ITALIC;
+					}
+					if((fs & FontStyle.Underline) == FontStyle.Underline)
+					{
+						cf.dwMask |= NativeMethods.CFM_UNDERLINE;
+						cf.dwEffects ^= NativeMethods.CFE_UNDERLINE;
+					}
+					if((fs & FontStyle.Strikeout) == FontStyle.Strikeout)
+					{
+						cf.dwMask |= NativeMethods.CFM_STRIKEOUT;
+						cf.dwEffects ^= NativeMethods.CFE_STRIKEOUT;
+					}
+
+					RtfSetCharFormat(rtb, cf);
+				}
+			}
+			catch(Exception) { Debug.Assert(false); }
 		}
 
 		[Obsolete("Use GfxUtil.LoadImage instead.")]
@@ -413,26 +480,31 @@ namespace KeePass.UI
 
 		private static void SetCueBanner(IntPtr hWnd, string strText)
 		{
-			Debug.Assert(strText != null); if(strText == null) throw new ArgumentNullException("strText");
+			if(hWnd == IntPtr.Zero) { Debug.Assert(false); return; }
+			if(strText == null) { Debug.Assert(false); strText = string.Empty; }
 
-			IntPtr pText = IntPtr.Zero;
+			IntPtr p = IntPtr.Zero;
 			try
 			{
-				pText = Marshal.StringToHGlobalUni(strText);
+				p = Marshal.StringToCoTaskMemUni(strText);
 				NativeMethods.SendMessage(hWnd, NativeMethods.EM_SETCUEBANNER,
-					IntPtr.Zero, pText);
+					IntPtr.Zero, p);
 			}
 			catch(Exception) { Debug.Assert(NativeLib.IsUnix()); }
-			finally { if(pText != IntPtr.Zero) Marshal.FreeHGlobal(pText); }
+			finally { if(p != IntPtr.Zero) Marshal.FreeCoTaskMem(p); }
 		}
 
 		public static void SetCueBanner(TextBox tb, string strText)
 		{
+			if(tb == null) { Debug.Assert(false); return; }
+
 			SetCueBanner(tb.Handle, strText);
 		}
 
 		public static void SetCueBanner(ToolStripTextBox tb, string strText)
 		{
+			if(tb == null) { Debug.Assert(false); return; }
+
 			SetCueBanner(tb.TextBox, strText);
 		}
 
@@ -491,22 +563,21 @@ namespace KeePass.UI
 		public static void PrepareStandardMultilineControl(RichTextBox rtb,
 			bool bSimpleTextOnly, bool bCtrlEnterAccepts)
 		{
-			Debug.Assert(rtb != null); if(rtb == null) throw new ArgumentNullException("rtb");
+			if(rtb == null) { Debug.Assert(false); return; }
 
-			try
-			{
-				int nStyle = NativeMethods.GetWindowStyle(rtb.Handle);
-
-				if((nStyle & NativeMethods.ES_WANTRETURN) == 0)
-				{
-					NativeMethods.SetWindowLong(rtb.Handle, NativeMethods.GWL_STYLE,
-						nStyle | NativeMethods.ES_WANTRETURN);
-
-					Debug.Assert((NativeMethods.GetWindowStyle(rtb.Handle) &
-						NativeMethods.ES_WANTRETURN) != 0);
-				}
-			}
-			catch(Exception) { }
+			// See CustomRichTextBoxEx.CreateParams
+			// try
+			// {
+			//	int nStyle = NativeMethods.GetWindowStyle(rtb.Handle);
+			//	if((nStyle & NativeMethods.ES_WANTRETURN) == 0)
+			//	{
+			//		NativeMethods.SetWindowLong(rtb.Handle, NativeMethods.GWL_STYLE,
+			//			nStyle | NativeMethods.ES_WANTRETURN);
+			//		Debug.Assert((NativeMethods.GetWindowStyle(rtb.Handle) &
+			//			NativeMethods.ES_WANTRETURN) != 0);
+			//	}
+			// }
+			// catch(Exception) { }
 
 			CustomRichTextBoxEx crtb = (rtb as CustomRichTextBoxEx);
 			if(crtb != null)
@@ -936,7 +1007,7 @@ namespace KeePass.UI
 		{
 			FolderBrowserDialog fbd = new FolderBrowserDialog();
 
-			if((strDescription != null) && (strDescription.Length > 0))
+			if(!string.IsNullOrEmpty(strDescription))
 				fbd.Description = strDescription;
 
 			fbd.ShowNewFolderButton = true;
@@ -1108,14 +1179,14 @@ namespace KeePass.UI
 			if(lv == null) throw new ArgumentNullException("lv");
 			if(vInternalList == null) throw new ArgumentNullException("vInternalList");
 
-			ListView.SelectedIndexCollection lvsc = lv.SelectedIndices;
-			int n = lvsc.Count; // Getting Count sends a message
+			ListView.SelectedIndexCollection lvsic = lv.SelectedIndices;
+			int n = lvsic.Count; // Getting Count sends a message
 			if(n == 0) return;
 
 			// LVSIC: one access by index requires O(n) time, thus copy
 			// all to an array (which requires O(1) for each element)
 			int[] v = new int[n];
-			lvsc.CopyTo(v, 0);
+			lvsic.CopyTo(v, 0);
 
 			for(int i = 0; i < n; ++i)
 			{
@@ -1255,27 +1326,31 @@ namespace KeePass.UI
 
 		private static char[] m_vTbTrim = null;
 		public static void ConfigureTbButton(ToolStripItem tb, string strText,
-			string strTooltip, ToolStripMenuItem tsmiEquiv)
+			string strToolTip, ToolStripMenuItem tsmiEquiv)
 		{
-			if(strText != null) tb.Text = strText;
+			if(tb == null) { Debug.Assert(false); return; }
 
 			if(m_vTbTrim == null)
 				m_vTbTrim = new char[] { ' ', '\t', '\r', '\n', '.', '\u2026' };
 
-			string strTip = (strTooltip ?? strText);
-			if(strTip == null) return;
+			string strT = (strText ?? string.Empty);
+			string strTT = (strToolTip ?? strT);
 
-			strTip = StrUtil.RemoveAccelerator(strTip);
-			strTip = strTip.Trim(m_vTbTrim);
+			strT = StrUtil.RemoveAccelerator(strT).Trim(m_vTbTrim);
+			strTT = StrUtil.RemoveAccelerator(strTT).Trim(m_vTbTrim);
 
-			if((tsmiEquiv != null) && (strTip.Length > 0))
+			Debug.Assert((strT.Length >= 1) || (tb.Text.Length == 0));
+			tb.Text = strT;
+
+			if((tsmiEquiv != null) && (strTT.Length != 0))
 			{
 				string strShortcut = tsmiEquiv.ShortcutKeyDisplayString;
 				if(!string.IsNullOrEmpty(strShortcut))
-					strTip += " (" + strShortcut + ")";
+					strTT += " (" + strShortcut + ")";
 			}
 
-			tb.ToolTipText = strTip;
+			Debug.Assert((strTT.Length >= 1) || (tb.ToolTipText.Length == 0));
+			tb.ToolTipText = strTT;
 		}
 
 		public static void ConfigureToolTip(ToolTip tt)
@@ -1306,7 +1381,7 @@ namespace KeePass.UI
 			int iSelectInner = -1;
 			GroupHandler gh = delegate(PwGroup pg)
 			{
-				string str = new string(' ', Math.Abs(8 * ((int)pg.GetLevel() - 1)));
+				string str = new string(' ', Math.Abs(8 * ((int)pg.GetDepth() - 1)));
 				str += pg.Name;
 
 				if((uuidToSelect != null) && pg.Uuid.Equals(uuidToSelect))
@@ -1684,8 +1759,7 @@ namespace KeePass.UI
 				IntPtr hHeader = NativeMethods.SendMessage(lv.Handle,
 					NativeMethods.LVM_GETHEADER, IntPtr.Zero, IntPtr.Zero);
 
-				bool bUnicode = (WinUtil.IsWindows2000 || WinUtil.IsWindowsXP ||
-					WinUtil.IsAtLeastWindowsVista);
+				bool bUnicode = (Marshal.SystemDefaultCharSize >= 2);
 				int nGetMsg = (bUnicode ? NativeMethods.HDM_GETITEMW :
 					NativeMethods.HDM_GETITEMA);
 				int nSetMsg = (bUnicode ? NativeMethods.HDM_SETITEMW :
@@ -2367,13 +2441,56 @@ namespace KeePass.UI
 			cb.AutoCompleteSource = AutoCompleteSource.ListItems;
 		}
 
+		public static void EnableAutoCompletion(TextBox tb, bool bAlsoAutoAppend,
+			string[] vItems)
+		{
+			if((tb == null) || (vItems == null)) { Debug.Assert(false); return; }
+			if(vItems.Length == 0) return;
+
+			try
+			{
+				foreach(string str in vItems)
+				{
+					if(str == null) { Debug.Assert(false); return; }
+				}
+
+				// The system/framework sorts the auto-completion list
+
+				VoidDelegate f = delegate()
+				{
+					try
+					{
+						AutoCompleteStringCollection c = new AutoCompleteStringCollection();
+						c.AddRange(vItems);
+
+						tb.AutoCompleteCustomSource = c;
+						tb.AutoCompleteSource = AutoCompleteSource.CustomSource;
+						tb.AutoCompleteMode = (bAlsoAutoAppend ?
+							AutoCompleteMode.SuggestAppend : AutoCompleteMode.Suggest);
+					}
+					catch(Exception) { Debug.Assert(false); }
+				};
+
+				if(tb.InvokeRequired || MonoWorkarounds.IsRequired(373134))
+					tb.Invoke(f);
+				else f();
+			}
+			catch(Exception) { Debug.Assert(false); }
+		}
+
 		public static void SetFocus(Control c, Form fParent)
+		{
+			SetFocus(c, fParent, false);
+		}
+
+		public static void SetFocus(Control c, Form fParent, bool bToForegroundAndFocus)
 		{
 			if(c == null) { Debug.Assert(false); return; }
 			// fParent may be null
 
 			try
 			{
+				Debug.Assert(c.Visible && c.Enabled);
 				if(fParent != null) fParent.ActiveControl = c;
 			}
 			catch(Exception) { Debug.Assert(false); }
@@ -2383,12 +2500,18 @@ namespace KeePass.UI
 				if(c.CanSelect) c.Select();
 
 				// https://sourceforge.net/p/keepass/discussion/329220/thread/045940bf/
-				// if(c.CanFocus) c.Focus();
+				// https://sourceforge.net/p/keepass/discussion/329220/thread/6834e222/
+				if(bToForegroundAndFocus && c.CanFocus) c.Focus();
 			}
 			catch(Exception) { Debug.Assert(false); }
 		}
 
 		public static void ResetFocus(Control c, Form fParent)
+		{
+			ResetFocus(c, fParent, false);
+		}
+
+		public static void ResetFocus(Control c, Form fParent, bool bToForegroundAndFocus)
 		{
 			if(c == null) { Debug.Assert(false); return; }
 			// fParent may be null
@@ -2424,7 +2547,7 @@ namespace KeePass.UI
 					}
 				}
 
-				if(bStdSetFocus) UIUtil.SetFocus(c, fParent);
+				if(bStdSetFocus) UIUtil.SetFocus(c, fParent, bToForegroundAndFocus);
 			}
 			catch(Exception) { Debug.Assert(false); }
 		}
@@ -2443,10 +2566,20 @@ namespace KeePass.UI
 			return dr;
 		}
 
+		internal static DialogResult ShowDialogAndDestroy(Form f, Form fParent)
+		{
+			if(f == null) { Debug.Assert(false); return DialogResult.None; }
+			if(fParent == null) return ShowDialogAndDestroy(f);
+
+			DialogResult dr = f.ShowDialog(fParent);
+			UIUtil.DestroyForm(f);
+			return dr;
+		}
+
 		/// <summary>
 		/// Show a modal dialog. If the result isn't the specified value, the
 		/// dialog is disposed and <c>true</c> is returned. Otherwise, <c>false</c>
-		/// is returned (without disposing the dialog!).
+		/// is returned (without disposing the dialog).
 		/// </summary>
 		/// <param name="f">Dialog to show.</param>
 		/// <param name="drNotValue">Comparison value.</param>
@@ -2899,33 +3032,102 @@ namespace KeePass.UI
 			catch(Exception) { Debug.Assert(NativeLib.IsUnix()); }
 		}
 
-		private static KeysConverter m_convKeys = null;
+		private static KeysConverter g_convKeys = null;
 		public static string GetKeysName(Keys k)
 		{
-			if(m_convKeys == null) m_convKeys = new KeysConverter();
-			return m_convKeys.ConvertToString(k);
+			StringBuilder sb = new StringBuilder();
+
+			if((k & Keys.Control) != Keys.None)
+			{
+				sb.Append(KPRes.KeyboardKeyCtrl);
+				sb.Append('+');
+			}
+			if((k & Keys.Alt) != Keys.None)
+			{
+				sb.Append(KPRes.KeyboardKeyAlt);
+				sb.Append('+');
+			}
+			if((k & Keys.Shift) != Keys.None)
+			{
+				sb.Append(KPRes.KeyboardKeyShift);
+				sb.Append('+');
+			}
+
+			Keys kCode = (k & Keys.KeyCode);
+			switch(kCode)
+			{
+				case Keys.None:
+					if((sb.Length != 0) && (sb[sb.Length - 1] == '+'))
+						sb.Remove(sb.Length - 1, 1);
+					break;
+
+				// .NET's German translation is "Eingabetaste",
+				// but the shorter "Eingabe" is more common
+				case Keys.Return: sb.Append(KPRes.KeyboardKeyReturn); break;
+
+				// "Esc" is more common than "Escape"
+				case Keys.Escape: sb.Append(KPRes.KeyboardKeyEsc); break;
+
+				case Keys.Up: sb.Append('\u2191'); break;
+				case Keys.Right: sb.Append('\u2192'); break;
+				case Keys.Down: sb.Append('\u2193'); break;
+				case Keys.Left: sb.Append('\u2190'); break;
+
+				default:
+					if(g_convKeys == null) g_convKeys = new KeysConverter();
+					sb.Append(g_convKeys.ConvertToString(kCode));
+					break;
+			}
+
+			return sb.ToString();
 		}
 
-		/// <summary>
-		/// Assign shortcut keys to a menu item. This method uses
-		/// custom-translated display strings.
-		/// </summary>
 		public static void AssignShortcut(ToolStripMenuItem tsmi, Keys k)
+		{
+			AssignShortcut(tsmi, k, null, false);
+		}
+
+		internal static void AssignShortcut(ToolStripMenuItem tsmi, Keys k,
+			ToolStripMenuItem tsmiSecondary, bool bTextOnly)
 		{
 			if(tsmi == null) { Debug.Assert(false); return; }
 
-			tsmi.ShortcutKeys = k;
+			if(!bTextOnly)
+			{
+				// Control-dependent shortcuts shouldn't be registered as global ones
+				Debug.Assert(((k & Keys.Modifiers) != Keys.None) || (k == Keys.F1));
+				Debug.Assert((k & Keys.KeyCode) != Keys.C);
+				Debug.Assert((k & Keys.KeyCode) != Keys.V);
+				Debug.Assert((k & Keys.KeyCode) != Keys.X);
+				Debug.Assert((k & Keys.KeyCode) != Keys.Y);
+				Debug.Assert((k & Keys.KeyCode) != Keys.Z);
+				Debug.Assert((k & Keys.KeyCode) != Keys.Escape);
+				Debug.Assert((k & Keys.KeyCode) != Keys.Return);
+				Debug.Assert((k & Keys.KeyCode) != Keys.Insert);
+				Debug.Assert((k & Keys.KeyCode) != Keys.Delete);
+				Debug.Assert((k & Keys.KeyCode) != Keys.F10);
 
-			string str = string.Empty;
-			if((k & Keys.Control) != Keys.None)
-				str += KPRes.KeyboardKeyCtrl + "+";
-			if((k & Keys.Alt) != Keys.None)
-				str += KPRes.KeyboardKeyAlt + "+";
-			if((k & Keys.Shift) != Keys.None)
-				str += KPRes.KeyboardKeyShift + "+";
-			str += GetKeysName(k & Keys.KeyCode);
+				tsmi.ShortcutKeys = k;
+			}
 
+			string str = GetKeysName(k);
 			tsmi.ShortcutKeyDisplayString = str;
+
+			if(tsmiSecondary != null)
+				tsmiSecondary.ShortcutKeyDisplayString = str;
+		}
+
+		internal static ToolStripItem GetSelectedItem(ToolStripItemCollection tsic)
+		{
+			if(tsic == null) { Debug.Assert(false); return null; }
+
+			foreach(ToolStripItem tsi in tsic)
+			{
+				if(tsi == null) { Debug.Assert(false); continue; }
+				if(tsi.Selected) return tsi;
+			}
+
+			return null;
 		}
 
 		public static void SetFocusedItem(ListView lv, ListViewItem lvi,
@@ -3079,19 +3281,19 @@ namespace KeePass.UI
 			Image img = null;
 			try
 			{
-				Icon ico = Icon.ExtractAssociatedIcon(strFilePath);
-				if(ico == null) return null;
-
-				img = new Bitmap(w, h, PixelFormat.Format32bppArgb);
-				using(Graphics g = Graphics.FromImage(img))
+				using(Icon ico = Icon.ExtractAssociatedIcon(strFilePath))
 				{
-					g.Clear(Color.Transparent);
-					g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-					g.SmoothingMode = SmoothingMode.HighQuality;
-					g.DrawIcon(ico, new Rectangle(0, 0, img.Width, img.Height));
-				}
+					if(ico == null) return null;
 
-				ico.Dispose();
+					img = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+					using(Graphics g = Graphics.FromImage(img))
+					{
+						g.Clear(Color.Transparent);
+						g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+						g.SmoothingMode = SmoothingMode.HighQuality;
+						g.DrawIcon(ico, new Rectangle(0, 0, img.Width, img.Height));
+					}
+				}
 			}
 			catch(Exception) { Debug.Assert(NativeLib.IsUnix()); }
 
@@ -3389,6 +3591,19 @@ namespace KeePass.UI
 			}
 
 			o = d;
+		}
+
+		private static int g_tLastDoEvents = 0;
+		internal static void DoEventsByTime(bool bForce)
+		{
+			int t = Environment.TickCount, tLast = g_tLastDoEvents;
+			int d = t - tLast;
+
+			if((d >= PwDefs.UIUpdateDelay) || bForce || (tLast == 0))
+			{
+				g_tLastDoEvents = t;
+				Application.DoEvents();
+			}
 		}
 	}
 }

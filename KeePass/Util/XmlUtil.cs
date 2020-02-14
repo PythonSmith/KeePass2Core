@@ -1,6 +1,6 @@
 ﻿/*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -19,12 +19,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Reflection;
 using System.Text;
+using System.Windows.Forms;
 using System.Xml;
 using System.Xml.Serialization;
-using System.Reflection;
-using System.Windows.Forms;
-using System.Diagnostics;
 
 using KeePass.Util.XmlSerialization;
 
@@ -36,7 +36,7 @@ namespace KeePass.Util
 	{
 		public static string SafeInnerText(XmlNode xmlNode)
 		{
-			Debug.Assert(xmlNode != null); if(xmlNode == null) return string.Empty;
+			if(xmlNode == null) { Debug.Assert(false); return string.Empty; }
 
 			return (xmlNode.InnerText ?? string.Empty);
 		}

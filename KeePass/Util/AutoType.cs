@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -39,6 +39,8 @@ using KeePassLib.Security;
 using KeePassLib.Collections;
 using KeePassLib.Delegates;
 using KeePassLib.Utility;
+
+using NativeLib = KeePassLib.Native.NativeLib;
 
 namespace KeePass.Util
 {
@@ -79,6 +81,8 @@ namespace KeePass.Util
 		public static event EventHandler<AutoTypeEventArgs> FilterCompilePre;
 		public static event EventHandler<AutoTypeEventArgs> FilterSendPre;
 		public static event EventHandler<AutoTypeEventArgs> FilterSend;
+
+		public static event EventHandler<AutoTypeEventArgs> SendPost;
 
 		public static event EventHandler<SequenceQueryEventArgs> SequenceQueryPre;
 		public static event EventHandler<SequenceQueryEventArgs> SequenceQuery;
@@ -154,7 +158,7 @@ namespace KeePass.Util
 			if(!pweData.GetAutoTypeEnabled()) return false;
 			if(!AppPolicy.Try(AppPolicyId.AutoType)) return false;
 
-			if(KeePassLib.Native.NativeLib.IsUnix())
+			if(NativeLib.IsUnix())
 			{
 				if(!NativeMethods.TryXDoTool())
 				{
@@ -199,6 +203,8 @@ namespace KeePass.Util
 					strError = args.Sequence + MessageService.NewParagraph +
 						ex.Message;
 				}
+
+				if(AutoType.SendPost != null) AutoType.SendPost(null, args);
 
 				if(!string.IsNullOrEmpty(strError))
 				{
@@ -428,27 +434,27 @@ namespace KeePass.Util
 			return strSeq;
 		}
 
-		internal static bool IsOwnWindow(IntPtr hWindow)
+		public static bool IsValidAutoTypeWindow(IntPtr hWnd, bool bBeepIfNot)
 		{
-			return ((hWindow == Program.GetSafeMainWindowHandle()) ||
-				GlobalWindowManager.HasWindow(hWindow));
-		}
-
-		public static bool IsValidAutoTypeWindow(IntPtr hWindow, bool bBeepIfNot)
-		{
-			bool bValid = !IsOwnWindow(hWindow);
+			bool bValid = !GlobalWindowManager.HasWindowMW(hWnd);
 
 			if(!bValid && bBeepIfNot) SystemSounds.Beep.Play();
 
 			return bValid;
 		}
 
-		public static bool PerformGlobal(List<PwDatabase> vSources,
+		public static bool PerformGlobal(List<PwDatabase> lSources,
 			ImageList ilIcons)
 		{
-			Debug.Assert(vSources != null); if(vSources == null) return false;
+			return PerformGlobal(lSources, ilIcons, null);
+		}
 
-			if(KeePassLib.Native.NativeLib.IsUnix())
+		internal static bool PerformGlobal(List<PwDatabase> lSources,
+			ImageList ilIcons, string strSeq)
+		{
+			if(lSources == null) { Debug.Assert(false); return false; }
+
+			if(NativeLib.IsUnix())
 			{
 				if(!NativeMethods.TryXDoTool(true))
 				{
@@ -486,19 +492,25 @@ namespace KeePass.Util
 
 				List<string> lSeq = GetSequencesForWindow(pe, hWnd, strWindow,
 					pdCurrent, evQueries.EventID);
-				foreach(string strSeq in lSeq)
-				{
+
+				if(!string.IsNullOrEmpty(strSeq) && (lSeq.Count != 0))
 					lCtxs.Add(new AutoTypeCtx(strSeq, pe, pdCurrent));
+				else
+				{
+					foreach(string strSeqCand in lSeq)
+					{
+						lCtxs.Add(new AutoTypeCtx(strSeqCand, pe, pdCurrent));
+					}
 				}
 
 				return true;
 			};
 
-			foreach(PwDatabase pwSource in vSources)
+			foreach(PwDatabase pd in lSources)
 			{
-				if(pwSource.IsOpen == false) continue;
-				pdCurrent = pwSource;
-				pwSource.RootGroup.TraverseTree(TraversalMethod.PreOrder, null, eh);
+				if((pd == null) || !pd.IsOpen) continue;
+				pdCurrent = pd;
+				pd.RootGroup.TraverseTree(TraversalMethod.PreOrder, null, eh);
 			}
 
 			GetSequencesForWindowEnd(evQueries);
@@ -573,7 +585,7 @@ namespace KeePass.Util
 
 			try
 			{
-				if(!NativeMethods.LoseFocus(fCurrent)) { Debug.Assert(false); }
+				if(!NativeMethods.LoseFocus(fCurrent, true)) { Debug.Assert(false); }
 
 				return PerformIntoCurrentWindow(pe, pdContext, strSeq);
 			}
@@ -612,7 +624,7 @@ namespace KeePass.Util
 			}
 			catch(Exception) { hWnd = IntPtr.Zero; strWindow = null; }
 
-			if(!KeePassLib.Native.NativeLib.IsUnix())
+			if(!NativeLib.IsUnix())
 			{
 				if(strWindow == null) { Debug.Assert(false); return false; }
 			}

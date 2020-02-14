@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -420,14 +420,16 @@ namespace KeePassLib.Serialization
 
 				++uCurEntry;
 				if(m_slLogger != null)
+				{
 					if(!m_slLogger.SetProgress((100 * uCurEntry) / uNumEntries))
 						return false;
+				}
 
 				return true;
 			};
 
 			if(!pgRoot.TraverseTree(TraversalMethod.PreOrder, gh, eh))
-				throw new InvalidOperationException();
+				throw new OperationCanceledException();
 
 			while(groupStack.Count > 1)
 			{
@@ -828,9 +830,9 @@ namespace KeePassLib.Serialization
 			{
 				m_xmlWriter.WriteAttributeString(AttrProtected, ValTrue);
 
-				byte[] pbEncoded = value.ReadXorredString(m_randomStream);
-				if(pbEncoded.Length > 0)
-					m_xmlWriter.WriteBase64(pbEncoded, 0, pbEncoded.Length);
+				byte[] pbEnc = value.ReadXorredString(m_randomStream);
+				if(pbEnc.Length > 0)
+					m_xmlWriter.WriteBase64(pbEnc, 0, pbEnc.Length);
 			}
 			else
 			{
@@ -840,7 +842,7 @@ namespace KeePassLib.Serialization
 				// string transformation here. By default, language-dependent conversions
 				// should be applied, otherwise characters could be rendered incorrectly
 				// (code page problems).
-				if(m_bLocalizedNames)
+				if(g_bLocalizedNames)
 				{
 					StringBuilder sb = new StringBuilder();
 					foreach(char ch in strValue)
@@ -851,8 +853,7 @@ namespace KeePassLib.Serialization
 						// page area
 						if(char.IsSymbol(ch) || char.IsSurrogate(ch))
 						{
-							System.Globalization.UnicodeCategory cat =
-								CharUnicodeInfo.GetUnicodeCategory(ch);
+							UnicodeCategory cat = CharUnicodeInfo.GetUnicodeCategory(ch);
 							// Map character to correct position in code page
 							chMapped = (char)((int)cat * 32 + ch);
 						}
@@ -920,9 +921,9 @@ namespace KeePassLib.Serialization
 			{
 				m_xmlWriter.WriteAttributeString(AttrProtected, ValTrue);
 
-				byte[] pbEncoded = value.ReadXorredData(m_randomStream);
-				if(pbEncoded.Length > 0)
-					m_xmlWriter.WriteBase64(pbEncoded, 0, pbEncoded.Length);
+				byte[] pbEnc = value.ReadXorredData(m_randomStream);
+				if(pbEnc.Length > 0)
+					m_xmlWriter.WriteBase64(pbEnc, 0, pbEnc.Length);
 			}
 			else
 			{

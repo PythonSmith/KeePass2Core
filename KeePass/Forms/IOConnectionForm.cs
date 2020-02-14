@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 using System.Xml;
 
@@ -78,6 +79,11 @@ namespace KeePass.Forms
 			// Must work without a parent window
 			Debug.Assert(this.StartPosition == FormStartPosition.CenterScreen);
 
+			// The password text box should not be focused by default
+			// in order to avoid a Caps Lock warning tooltip bug;
+			// https://sourceforge.net/p/keepass/bugs/1807/
+			Debug.Assert((m_tbPassword.TabIndex >= 2) && !m_tbPassword.Focused);
+
 			InitAdvancedTab(); // After translation, before resize
 
 			GlobalWindowManager.AddWindow(this);
@@ -116,8 +122,17 @@ namespace KeePass.Forms
 				m_cmbCredSaveMode.Enabled = false;
 			}
 
+			ThreadPool.QueueUserWorkItem(delegate(object state)
+			{
+				try { InitAutoCompletions(); }
+				catch(Exception) { Debug.Assert(false); }
+			});
+		}
+
+		private void OnFormShown(object sender, EventArgs e)
+		{
 			if((m_tbUrl.TextLength > 0) && (m_tbUserName.TextLength > 0))
-				UIUtil.SetFocus(m_tbPassword, this);
+				UIUtil.ResetFocus(m_tbPassword, this);
 			else if(m_tbUrl.TextLength > 0)
 				UIUtil.SetFocus(m_tbUserName, this);
 			else UIUtil.SetFocus(m_tbUrl, this);
@@ -436,6 +451,44 @@ namespace KeePass.Forms
 			}
 
 			m_pnlAdv.ResumeLayout(true);
+		}
+
+		private static void InitAutoCompletion(TextBox tb, Dictionary<string, bool> d)
+		{
+			if(d.Count == 0) return;
+
+			string[] v = new string[d.Count];
+			d.Keys.CopyTo(v, 0);
+			Array.Sort<string>(v, StrUtil.CaseIgnoreComparer);
+
+			// Do not append, because long suggestions hide the start
+			UIUtil.EnableAutoCompletion(tb, false, v); // Invokes
+		}
+
+		private void InitAutoCompletions()
+		{
+			Dictionary<string, bool> dUrls = new Dictionary<string, bool>();
+			Dictionary<string, bool> dUsers = new Dictionary<string, bool>();
+
+			MainForm mf = Program.MainForm;
+			MruList l = ((mf != null) ? mf.FileMruList : null);
+			if(l == null) { Debug.Assert(false); return; }
+
+			for(uint u = 0; u < l.ItemCount; ++u)
+			{
+				IOConnectionInfo ioc = (l.GetItem(u).Value as IOConnectionInfo);
+				if(ioc == null) { Debug.Assert(false); continue; }
+				if(ioc.IsLocalFile()) continue;
+
+				string str = ioc.Path;
+				if(!string.IsNullOrEmpty(str)) dUrls[str] = true;
+
+				str = ioc.UserName;
+				if(!string.IsNullOrEmpty(str)) dUsers[str] = true;
+			}
+
+			InitAutoCompletion(m_tbUrl, dUrls);
+			InitAutoCompletion(m_tbUserName, dUsers);
 		}
 	}
 }

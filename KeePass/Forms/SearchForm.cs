@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -52,6 +52,8 @@ namespace KeePass.Forms
 		private PwGroup m_pgRoot = null;
 		private PwGroup m_pgResultsGroup = null;
 
+		private bool m_bUpdating = false;
+
 		public bool CanCloseWithoutDataLoss { get { return true; } }
 
 		/// <summary>
@@ -60,6 +62,12 @@ namespace KeePass.Forms
 		public PwGroup SearchResultsGroup
 		{
 			get { return m_pgResultsGroup; }
+		}
+
+		internal SearchParameters SearchResultParameters
+		{
+			// See GetSearchParameters
+			get { return Program.Config.Defaults.SearchParameters; }
 		}
 
 		/// <summary>
@@ -92,8 +100,10 @@ namespace KeePass.Forms
 				strTitle += " - " + m_pgRoot.Name;
 
 			BannerFactory.CreateBannerEx(this, m_bannerImage,
-				Properties.Resources.B48x48_XMag, strTitle, KPRes.SearchDesc);
+				Properties.Resources.B48x48_XMag, strTitle, KPRes.SearchDesc2);
 			this.Icon = AppIcons.Default;
+
+			m_bUpdating = true;
 
 			UIUtil.SetText(m_cbDerefData, m_cbDerefData.Text + " (" + KPRes.Slow + ")");
 
@@ -107,6 +117,7 @@ namespace KeePass.Forms
 			m_cbStringName.Checked = sp.SearchInStringNames;
 			m_cbTags.Checked = sp.SearchInTags;
 			m_cbUuid.Checked = sp.SearchInUuids;
+			m_cbGroupPath.Checked = sp.SearchInGroupPaths;
 			m_cbGroupName.Checked = sp.SearchInGroupNames;
 
 			StringComparison sc = sp.ComparisonMode;
@@ -116,9 +127,12 @@ namespace KeePass.Forms
 
 			m_cbRegEx.Checked = sp.RegularExpression;
 			m_cbExcludeExpired.Checked = sp.ExcludeExpired;
+			m_cbIgnoreGroupSettings.Checked = !sp.RespectEntrySearchingDisabled;
 
 			string strTrf = SearchUtil.GetTransformation(sp);
 			m_cbDerefData.Checked = (strTrf == SearchUtil.StrTrfDeref);
+
+			m_bUpdating = false;
 
 			EnableControlsEx();
 			UIUtil.SetFocus(m_tbSearch, this);
@@ -203,6 +217,7 @@ namespace KeePass.Forms
 			sp.SearchInStringNames = m_cbStringName.Checked;
 			sp.SearchInTags = m_cbTags.Checked;
 			sp.SearchInUuids = m_cbUuid.Checked;
+			sp.SearchInGroupPaths = m_cbGroupPath.Checked;
 			sp.SearchInGroupNames = m_cbGroupName.Checked;
 
 			sp.ComparisonMode = (m_cbCaseSensitive.Checked ?
@@ -210,6 +225,7 @@ namespace KeePass.Forms
 				StringComparison.InvariantCultureIgnoreCase);
 
 			sp.ExcludeExpired = m_cbExcludeExpired.Checked;
+			sp.RespectEntrySearchingDisabled = !m_cbIgnoreGroupSettings.Checked;
 
 			SearchUtil.SetTransformation(sp, (m_cbDerefData.Checked ?
 				SearchUtil.StrTrfDeref : string.Empty));
@@ -219,10 +235,24 @@ namespace KeePass.Forms
 
 		private void EnableControlsEx()
 		{
+			if(m_bUpdating) return;
+			m_bUpdating = true;
+
 			m_lblHints.Enabled = !m_cbRegEx.Checked;
+
+			bool bGroupPath = m_cbGroupPath.Checked;
+			m_cbGroupName.Enabled = !bGroupPath;
+			if(bGroupPath) m_cbGroupName.Checked = true;
+
+			m_bUpdating = false;
 		}
 
 		private void OnRegExCheckedChanged(object sender, EventArgs e)
+		{
+			EnableControlsEx();
+		}
+
+		private void OnGroupPathCheckedChanged(object sender, EventArgs e)
 		{
 			EnableControlsEx();
 		}

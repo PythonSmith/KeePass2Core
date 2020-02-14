@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -34,6 +34,7 @@ using KeePass.Native;
 using KeePass.Resources;
 using KeePass.UI;
 using KeePass.Util;
+using KeePass.Util.Spr;
 
 using KeePassLib;
 using KeePassLib.Collections;
@@ -75,12 +76,14 @@ namespace KeePass.Forms
 		private PwIcon m_pwEntryIcon = PwIcon.Key;
 		private PwUuid m_pwCustomIconID = PwUuid.Zero;
 		private ImageList m_ilIcons = null;
+		private List<PwUuid> m_lOrgCustomIconIDs = new List<PwUuid>();
 
 		private bool m_bLockEnabledState = false;
 		private bool m_bTouchedOnce = false;
 
 		private bool m_bInitializing = true;
 		private bool m_bForceClosing = false;
+		private bool m_bUrlOverrideWarning = false;
 
 		private PwInputControlGroup m_icgPassword = new PwInputControlGroup();
 		private ExpiryControlGroup m_cgExpiry = new ExpiryControlGroup();
@@ -104,9 +107,6 @@ namespace KeePass.Forms
 		private const PwIcon m_pwObjectProtected = PwIcon.PaperLocked;
 		private const PwIcon m_pwObjectPlainText = PwIcon.PaperNew;
 
-		public event EventHandler<CancellableOperationEventArgs> EntrySaving;
-		public event EventHandler EntrySaved;
-
 		private const PwCompareOptions m_cmpOpt = (PwCompareOptions.NullEmptyEquivStd |
 			PwCompareOptions.IgnoreTimes);
 
@@ -115,6 +115,14 @@ namespace KeePass.Forms
 			None = 0,
 			ByIndex,
 			ByRef
+		}
+
+		public event EventHandler<CancellableOperationEventArgs> EntrySaving;
+		public event EventHandler EntrySaved;
+
+		public PwEditMode EditModeEx
+		{
+			get { return m_pwEditMode; }
 		}
 
 		public bool HasModifiedEntry
@@ -209,6 +217,13 @@ namespace KeePass.Forms
 			m_vBinaries = m_pwEntry.Binaries.CloneDeep();
 			m_atConfig = m_pwEntry.AutoType.CloneDeep();
 			m_vHistory = m_pwEntry.History.CloneDeep();
+
+			m_lOrgCustomIconIDs.Clear();
+			if(m_pwDatabase != null)
+			{
+				foreach(PwCustomIcon ci in m_pwDatabase.CustomIcons)
+					m_lOrgCustomIconIDs.Add(ci.Uuid);
+			}
 		}
 
 		private void InitEntryTab()
@@ -216,7 +231,11 @@ namespace KeePass.Forms
 			m_pwEntryIcon = m_pwEntry.IconId;
 			m_pwCustomIconID = m_pwEntry.CustomIconUuid;
 
-			if(!m_pwCustomIconID.Equals(PwUuid.Zero))
+			// The user may have deleted the custom icon (using the
+			// icon dialog accessible through the entry dialog and
+			// then opening a history entry)
+			if(!m_pwCustomIconID.Equals(PwUuid.Zero) &&
+				(m_pwDatabase.GetCustomIconIndex(m_pwCustomIconID) >= 0))
 			{
 				// int nInx = (int)PwIcon.Count + m_pwDatabase.GetCustomIconIndex(m_pwCustomIconID);
 				// if((nInx > -1) && (nInx < m_ilIcons.Images.Count))
@@ -299,10 +318,10 @@ namespace KeePass.Forms
 
 			if(m_pwEditMode == PwEditMode.ViewReadOnlyEntry)
 			{
-				m_btnStrAdd.Enabled = m_btnStrEdit.Enabled =
-					m_btnStrDelete.Enabled = m_btnStrMove.Enabled =
-					m_btnBinAdd.Enabled = m_btnBinDelete.Enabled = false;
-
+				m_btnStrAdd.Enabled = m_btnStrDelete.Enabled =
+					m_btnStrMove.Enabled = m_btnBinAdd.Enabled =
+					m_btnBinDelete.Enabled = false;
+				m_btnStrEdit.Text = KPRes.ViewCmd;
 				// Always available:
 				// m_btnBinOpen.Enabled = m_btnBinSave.Enabled = false;
 
@@ -352,12 +371,13 @@ namespace KeePass.Forms
 				{
 					if(!PwDefs.IsStandardField(kvpStr.Key))
 					{
-						PwIcon pwIcon = (kvpStr.Value.IsProtected ? m_pwObjectProtected :
+						bool bProt = kvpStr.Value.IsProtected;
+						PwIcon pwIcon = (bProt ? m_pwObjectProtected :
 							m_pwObjectPlainText);
 
 						ListViewItem lvi = m_lvStrings.Items.Add(kvpStr.Key, (int)pwIcon);
 
-						if(kvpStr.Value.IsProtected)
+						if(bProt)
 							lvi.SubItems.Add(PwDefs.HiddenPassword);
 						else
 						{
@@ -435,6 +455,10 @@ namespace KeePass.Forms
 
 			m_cbCustomForegroundColor.Checked = (m_clrForeground != Color.Empty);
 			m_cbCustomBackgroundColor.Checked = (m_clrBackground != Color.Empty);
+
+			// https://sourceforge.net/p/keepass/discussion/329220/thread/f98dece5/
+			if(Program.Translation.Properties.RightToLeft)
+				m_cmbOverrideUrl.RightToLeft = RightToLeft.No;
 
 			m_cmbOverrideUrl.Text = m_pwEntry.OverrideUrl;
 			m_tbTags.Text = StrUtil.TagsToString(m_pwEntry.Tags, true);
@@ -561,6 +585,9 @@ namespace KeePass.Forms
 
 		private void InitHistoryTab()
 		{
+			m_lblCreatedData.Text = TimeUtil.ToDisplayString(m_pwEntry.CreationTime);
+			m_lblModifiedData.Text = TimeUtil.ToDisplayString(m_pwEntry.LastModificationTime);
+
 			m_lvHistory.SmallImageList = m_ilIcons;
 
 			m_lvHistory.Columns.Add(KPRes.Version);
@@ -581,13 +608,35 @@ namespace KeePass.Forms
 		{
 			UIScrollInfo s = UIUtil.GetScrollInfo(m_lvHistory, true);
 
+			ImageList ilIcons = m_lvHistory.SmallImageList;
+			int ci = ((ilIcons != null) ? ilIcons.Images.Count : 0);
+
 			m_lvHistory.BeginUpdate();
 			m_lvHistory.Items.Clear();
 
 			foreach(PwEntry pe in m_vHistory)
 			{
 				ListViewItem lvi = m_lvHistory.Items.Add(TimeUtil.ToDisplayString(
-					pe.LastModificationTime), (int)pe.IconId);
+					pe.LastModificationTime));
+
+				int idxIcon = (int)pe.IconId;
+				PwUuid pu = pe.CustomIconUuid;
+				if(!pu.Equals(PwUuid.Zero))
+				{
+					// The user may have deleted the custom icon (using
+					// the icon dialog accessible through this entry
+					// dialog); continuing to show the deleted custom
+					// icon would be confusing
+					int idxNew = m_pwDatabase.GetCustomIconIndex(pu);
+					if(idxNew >= 0) // Icon not deleted
+					{
+						int idxOrg = m_lOrgCustomIconIDs.IndexOf(pu);
+						if(idxOrg >= 0) idxIcon = (int)PwIcon.Count + idxOrg;
+						else { Debug.Assert(false); }
+					}
+				}
+				if(idxIcon < ci) lvi.ImageIndex = idxIcon;
+				else { Debug.Assert(false); }
 
 				lvi.SubItems.Add(pe.Strings.ReadSafe(PwDefs.TitleField));
 				lvi.SubItems.Add(pe.Strings.ReadSafe(PwDefs.UserNameField));
@@ -616,6 +665,13 @@ namespace KeePass.Forms
 			Debug.Assert(m_ilIcons != null); if(m_ilIcons == null) throw new InvalidOperationException();
 
 			m_bInitializing = true;
+
+			// If there is an intermediate form, the custom icons
+			// in the image list may be outdated
+			Form fTop = GlobalWindowManager.TopWindow;
+			Debug.Assert(fTop != this); // Before adding ourself
+			if((fTop != null) && (fTop != Program.MainForm))
+				m_lOrgCustomIconIDs.Clear();
 
 			GlobalWindowManager.AddWindow(this);
 			GlobalWindowManager.CustomizeControl(m_ctxTools);
@@ -657,7 +713,7 @@ namespace KeePass.Forms
 			}
 			else if(m_pwEditMode == PwEditMode.ViewReadOnlyEntry)
 			{
-				strTitle = KPRes.ViewEntry;
+				strTitle = KPRes.ViewEntryReadOnly;
 				strDesc = KPRes.ViewEntryDesc;
 			}
 			else { Debug.Assert(false); }
@@ -666,6 +722,9 @@ namespace KeePass.Forms
 				KeePass.Properties.Resources.B48x48_KGPG_Sign, strTitle, strDesc);
 			this.Icon = AppIcons.Default;
 			this.Text = strTitle;
+
+			// m_btnTools.Text += " \u23F7 \u25BC \u25BE \u2BC6 \uD83D\uDF83";
+			// m_btnTools.Width += DpiUtil.ScaleIntX(60);
 
 			m_imgGenPw = UIUtil.CreateDropDownImage(Properties.Resources.B16x16_Key_New);
 			m_imgStdExpire = UIUtil.CreateDropDownImage(Properties.Resources.B16x16_History);
@@ -727,7 +786,16 @@ namespace KeePass.Forms
 
 			ThreadPool.QueueUserWorkItem(delegate(object state)
 			{
-				try { InitOverridesBox(); }
+				try
+				{
+					InitUserNameSuggestions();
+					InitOverridesBox();
+
+					string[] vSeq = m_pwDatabase.RootGroup.GetAutoTypeSequences(true);
+					// Do not append, because long suggestions hide the start
+					UIUtil.EnableAutoCompletion(m_tbDefaultAutoTypeSeq,
+						false, vSeq); // Invokes
+				}
 				catch(Exception) { Debug.Assert(false); }
 			});
 
@@ -767,12 +835,31 @@ namespace KeePass.Forms
 			int nStringsSel = m_lvStrings.SelectedItems.Count;
 			int nBinSel = m_lvBinaries.SelectedItems.Count;
 
+			m_btnStrEdit.Enabled = (nStringsSel == 1);
+
 			m_btnBinOpen.Enabled = (nBinSel == 1);
 			m_btnBinSave.Enabled = (nBinSel >= 1);
 
+			bool bUrlEmpty = (m_tbUrl.TextLength == 0);
+			bool bUrlOverrideEmpty = (m_cmbOverrideUrl.Text.Length == 0);
+			bool bWarn = (bUrlEmpty && !bUrlOverrideEmpty);
+			if(bWarn != m_bUrlOverrideWarning)
+			{
+				if(bWarn) m_cmbOverrideUrl.BackColor = AppDefs.ColorEditError;
+				else m_cmbOverrideUrl.ResetBackColor();
+
+				try
+				{
+					m_ttBalloon.SetToolTip(m_cmbOverrideUrl, (bWarn ?
+						KPRes.UrlFieldEmptyFirstTab : string.Empty));
+				}
+				catch(Exception) { Debug.Assert(false); }
+
+				m_bUrlOverrideWarning = bWarn;
+			}
+
 			if(m_bLockEnabledState) return;
 
-			m_btnStrEdit.Enabled = (nStringsSel == 1);
 			m_btnStrDelete.Enabled = (nStringsSel >= 1);
 
 			m_btnBinDelete.Enabled = (nBinSel >= 1);
@@ -970,7 +1057,7 @@ namespace KeePass.Forms
 
 		private void OnBtnStrAdd(object sender, EventArgs e)
 		{
-			if(m_pwEditMode == PwEditMode.ViewReadOnlyEntry) return;
+			if(m_pwEditMode == PwEditMode.ViewReadOnlyEntry) { Debug.Assert(false); return; }
 
 			UpdateEntryStrings(true, false, false);
 
@@ -986,8 +1073,6 @@ namespace KeePass.Forms
 
 		private void OnBtnStrEdit(object sender, EventArgs e)
 		{
-			if(m_pwEditMode == PwEditMode.ViewReadOnlyEntry) return;
-
 			ListView.SelectedListViewItemCollection vSel = m_lvStrings.SelectedItems;
 			if(vSel.Count <= 0) return;
 
@@ -995,10 +1080,12 @@ namespace KeePass.Forms
 
 			string strName = vSel[0].Text;
 			ProtectedString psValue = m_vStrings.Get(strName);
-			Debug.Assert(psValue != null);
+			if(psValue == null) { Debug.Assert(false); return; }
 
 			EditStringForm esf = new EditStringForm();
 			esf.InitEx(m_vStrings, strName, psValue, m_pwDatabase);
+			esf.ReadOnlyEx = (m_pwEditMode == PwEditMode.ViewReadOnlyEntry);
+
 			if(UIUtil.ShowDialogAndDestroy(esf) == DialogResult.OK)
 				UpdateEntryStrings(false, false, true);
 		}
@@ -1056,8 +1143,8 @@ namespace KeePass.Forms
 			if(nSelCount == 1)
 			{
 				SaveFileDialogEx sfd = UIUtil.CreateSaveFileDialog(KPRes.AttachmentSave,
-					lvsc[0].Text, UIUtil.CreateFileTypeFilter(null, null, true), 1, null,
-					AppDefs.FileDialogContext.Attachments);
+					UrlUtil.GetSafeFileName(lvsc[0].Text), UIUtil.CreateFileTypeFilter(
+					null, null, true), 1, null, AppDefs.FileDialogContext.Attachments);
 
 				if(sfd.ShowDialog() == DialogResult.OK)
 					SaveAttachmentTo(lvsc[0], sfd.FileName, false);
@@ -1068,39 +1155,40 @@ namespace KeePass.Forms
 
 				if(fbd.ShowDialog() == DialogResult.OK)
 				{
-					string strRootPath = UrlUtil.EnsureTerminatingSeparator(fbd.SelectedPath, false);
+					string strRootPath = UrlUtil.EnsureTerminatingSeparator(
+						fbd.SelectedPath, false);
 
 					foreach(ListViewItem lvi in lvsc)
-						SaveAttachmentTo(lvi, strRootPath + lvi.Text, true);
+						SaveAttachmentTo(lvi, strRootPath + UrlUtil.GetSafeFileName(
+							lvi.Text), true);
 				}
 				fbd.Dispose();
 			}
 		}
 
-		private void SaveAttachmentTo(ListViewItem lvi, string strFileName,
+		private void SaveAttachmentTo(ListViewItem lvi, string strFile,
 			bool bConfirmOverwrite)
 		{
-			Debug.Assert(lvi != null); if(lvi == null) throw new ArgumentNullException("lvi");
-			Debug.Assert(strFileName != null); if(strFileName == null) throw new ArgumentNullException("strFileName");
+			if(lvi == null) { Debug.Assert(false); return; }
+			if(string.IsNullOrEmpty(strFile)) { Debug.Assert(false); return; }
 
-			if(bConfirmOverwrite && File.Exists(strFileName))
+			if(bConfirmOverwrite && File.Exists(strFile))
 			{
 				string strMsg = KPRes.FileExistsAlready + MessageService.NewLine +
-					strFileName + MessageService.NewParagraph +
+					strFile + MessageService.NewParagraph +
 					KPRes.OverwriteExistingFileQuestion;
 
-				if(MessageService.AskYesNo(strMsg) == false)
-					return;
+				if(!MessageService.AskYesNo(strMsg)) return;
 			}
 
 			ProtectedBinary pb = m_vBinaries.Get(lvi.Text);
-			Debug.Assert(pb != null); if(pb == null) throw new ArgumentException();
+			if(pb == null) { Debug.Assert(false); return; }
 
 			byte[] pbData = pb.ReadData();
-			try { File.WriteAllBytes(strFileName, pbData); }
+			try { File.WriteAllBytes(strFile, pbData); }
 			catch(Exception exWrite)
 			{
-				MessageService.ShowWarning(strFileName, exWrite);
+				MessageService.ShowWarning(strFile, exWrite);
 			}
 			if(pb.IsProtected) MemUtil.ZeroByteArray(pbData);
 		}
@@ -1128,11 +1216,11 @@ namespace KeePass.Forms
 		{
 			if(m_pwEditMode == PwEditMode.ViewReadOnlyEntry) return;
 
-			ListView.SelectedIndexCollection lvSel = m_lvAutoType.SelectedIndices;
-			Debug.Assert(lvSel.Count == 1); if(lvSel.Count != 1) return;
+			ListView.SelectedIndexCollection lvsic = m_lvAutoType.SelectedIndices;
+			if(lvsic.Count != 1) { Debug.Assert(false); return; }
 
 			EditAutoTypeItemForm dlg = new EditAutoTypeItemForm();
-			dlg.InitEx(m_atConfig, lvSel[0], false, m_tbDefaultAutoTypeSeq.Text,
+			dlg.InitEx(m_atConfig, lvsic[0], false, m_tbDefaultAutoTypeSeq.Text,
 				m_vStrings);
 
 			if(UIUtil.ShowDialogAndDestroy(dlg) == DialogResult.OK)
@@ -1161,10 +1249,10 @@ namespace KeePass.Forms
 		{
 			Debug.Assert(m_vHistory.UCount == m_lvHistory.Items.Count);
 
-			ListView.SelectedIndexCollection lvsi = m_lvHistory.SelectedIndices;
-			if(lvsi.Count != 1) { Debug.Assert(false); return; }
+			ListView.SelectedIndexCollection lvsic = m_lvHistory.SelectedIndices;
+			if(lvsic.Count != 1) { Debug.Assert(false); return; }
 
-			PwEntry pe = m_vHistory.GetAt((uint)lvsi[0]);
+			PwEntry pe = m_vHistory.GetAt((uint)lvsic[0]);
 			if(pe == null) { Debug.Assert(false); return; }
 
 			PwEntryForm pwf = new PwEntryForm();
@@ -1180,14 +1268,14 @@ namespace KeePass.Forms
 
 			Debug.Assert(m_vHistory.UCount == m_lvHistory.Items.Count);
 
-			ListView.SelectedIndexCollection lvsc = m_lvHistory.SelectedIndices;
-			int n = lvsc.Count; // Getting Count sends a message
+			ListView.SelectedIndexCollection lvsic = m_lvHistory.SelectedIndices;
+			int n = lvsic.Count; // Getting Count sends a message
 			if(n == 0) return;
 
 			// LVSIC: one access by index requires O(n) time, thus copy
 			// all to an array (which requires O(1) for each element)
 			int[] v = new int[n];
-			lvsc.CopyTo(v, 0);
+			lvsic.CopyTo(v, 0);
 
 			for(int i = 0; i < n; ++i)
 				m_vHistory.RemoveAt((uint)v[n - i - 1]);
@@ -1202,10 +1290,10 @@ namespace KeePass.Forms
 
 			Debug.Assert(m_vHistory.UCount == m_lvHistory.Items.Count);
 
-			ListView.SelectedIndexCollection lvsi = m_lvHistory.SelectedIndices;
-			if(lvsi.Count != 1) { Debug.Assert(false); return; }
+			ListView.SelectedIndexCollection lvsic = m_lvHistory.SelectedIndices;
+			if(lvsic.Count != 1) { Debug.Assert(false); return; }
 
-			m_pwEntry.RestoreFromBackup((uint)lvsi[0], m_pwDatabase);
+			m_pwEntry.RestoreFromBackup((uint)lvsic[0], m_pwDatabase);
 			m_pwEntry.Touch(true, false);
 			m_bTouchedOnce = true;
 			this.DialogResult = DialogResult.OK; // Doesn't invoke OnBtnOK
@@ -1309,8 +1397,8 @@ namespace KeePass.Forms
 			{
 				lvsc = m_lvAutoType.SelectedItems;
 				if((lvsc != null) && (lvsc.Count > 0))
-					ClipboardUtil.Copy(lvsc[0].SubItems[1].Text, true, true, null,
-						m_pwDatabase, this.Handle);
+					ClipboardUtil.Copy(lvsc[0].SubItems[1].Text, false, true,
+						null, null, this.Handle);
 			}
 			else { Debug.Assert(false); }
 		}
@@ -1341,6 +1429,8 @@ namespace KeePass.Forms
 			}
 
 			UIUtil.DestroyForm(ipf);
+
+			UpdateHistoryList(true); // User may have deleted a custom icon
 		}
 
 		private void OnAutoTypeSeqInheritCheckedChanged(object sender, EventArgs e)
@@ -1477,7 +1567,7 @@ namespace KeePass.Forms
 			{
 				byte[] pbEntropy = EntropyForm.CollectEntropyIfEnabled(pgf.SelectedProfile);
 				ProtectedString psNew = PwGeneratorUtil.GenerateAcceptable(
-					pgf.SelectedProfile, pbEntropy, m_pwEntry, m_pwDatabase);
+					pgf.SelectedProfile, pbEntropy, m_pwEntry, m_pwDatabase, true);
 				m_icgPassword.SetPassword(psNew, true);
 			}
 			UIUtil.DestroyForm(pgf);
@@ -1513,7 +1603,7 @@ namespace KeePass.Forms
 			if(pwp != null)
 			{
 				ProtectedString psNew = PwGeneratorUtil.GenerateAcceptable(
-					pwp, null, m_pwEntry, m_pwDatabase);
+					pwp, null, m_pwEntry, m_pwDatabase, true);
 				m_icgPassword.SetPassword(psNew, true);
 			}
 			else { Debug.Assert(false); }
@@ -1713,7 +1803,8 @@ namespace KeePass.Forms
 				null, false, AppDefs.FileDialogContext.Attachments);
 
 			if(dlg.ShowDialog() == DialogResult.OK)
-				m_tbUrl.Text = "cmd://\"" + dlg.FileName + "\"";
+				m_tbUrl.Text = "cmd://\"" + SprEncoding.EncodeForCommandLine(
+					dlg.FileName) + "\"";
 		}
 
 		private void OnCtxUrlSelApp(object sender, EventArgs e)
@@ -1773,14 +1864,6 @@ namespace KeePass.Forms
 			else m_rtNotes.Text += "\r\n" + strRef;
 		}
 
-		protected override bool ProcessDialogKey(Keys keyData)
-		{
-			if(((keyData == Keys.Return) || (keyData == Keys.Enter)) && m_rtNotes.Focused)
-				return false; // Forward to RichTextBox
-
-			return base.ProcessDialogKey(keyData);
-		}
-
 		private bool m_bClosing = false; // Mono bug workaround
 		private void OnFormClosing(object sender, FormClosingEventArgs e)
 		{
@@ -1805,7 +1888,7 @@ namespace KeePass.Forms
 				if(bModified)
 				{
 					string strTitle = pe.Strings.ReadSafe(PwDefs.TitleField).Trim();
-					string strHdr = ((strTitle.Length == 0) ? (KPRes.Save + "?") :
+					string strHdr = ((strTitle.Length == 0) ? string.Empty :
 						(KPRes.Entry + @" '" + strTitle + @"'"));
 
 					VistaTaskDialog dlg = new VistaTaskDialog();
@@ -2156,6 +2239,39 @@ namespace KeePass.Forms
 				StrUtil.NormalizeNewLines(str, true)));
 
 			// Custom strings are normalized by the string editing form
+		}
+
+		private void InitUserNameSuggestions()
+		{
+			try
+			{
+				AceColumn c = Program.Config.MainWindow.FindColumn(
+					AceColumnType.UserName);
+				if((c == null) || c.HideWithAsterisks) return;
+
+				GFunc<PwEntry, string> f = delegate(PwEntry pe)
+				{
+					string str = pe.Strings.ReadSafe(PwDefs.UserNameField);
+					return ((str.Length != 0) ? str : null);
+				};
+
+				string[] v = m_pwDatabase.RootGroup.CollectEntryStrings(f, true);
+
+				// Do not append, because it breaks Ctrl+A;
+				// https://sourceforge.net/p/keepass/discussion/329220/thread/4f626b91/
+				UIUtil.EnableAutoCompletion(m_tbUserName, false, v); // Invokes
+			}
+			catch(Exception) { Debug.Assert(false); }
+		}
+
+		private void OnUrlTextChanged(object sender, EventArgs e)
+		{
+			EnableControlsEx();
+		}
+
+		private void OnUrlOverrideTextChanged(object sender, EventArgs e)
+		{
+			EnableControlsEx();
 		}
 	}
 }

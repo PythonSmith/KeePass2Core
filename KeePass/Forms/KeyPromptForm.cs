@@ -1,6 +1,6 @@
 /*
   KeePass Password Safe - The Open-Source Password Manager
-  Copyright (C) 2003-2018 Dominik Reichl <dominik.reichl@t-online.de>
+  Copyright (C) 2003-2020 Dominik Reichl <dominik.reichl@t-online.de>
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -37,6 +37,7 @@ using KeePassLib;
 using KeePassLib.Delegates;
 using KeePassLib.Keys;
 using KeePassLib.Native;
+using KeePassLib.Security;
 using KeePassLib.Serialization;
 using KeePassLib.Utility;
 
@@ -113,12 +114,17 @@ namespace KeePass.Forms
 		{
 			m_bInitializing = true;
 
+			// The password text box should not be focused by default
+			// in order to avoid a Caps Lock warning tooltip bug;
+			// https://sourceforge.net/p/keepass/bugs/1807/
+			Debug.Assert((m_tbPassword.TabIndex >= 2) && !m_tbPassword.Focused);
+
 			GlobalWindowManager.AddWindow(this);
 			// if(m_bRedirectActivation) Program.MainForm.RedirectActivationPush(this);
 
 			string strBannerTitle = (!string.IsNullOrEmpty(m_strCustomTitle) ?
 				m_strCustomTitle : KPRes.EnterCompositeKey);
-			string strBannerDesc = WinUtil.CompactPath(m_ioInfo.Path, 45);
+			string strBannerDesc = m_ioInfo.GetDisplayName(); // Compacted by banner
 			BannerFactory.CreateBannerEx(this, m_bannerImage,
 				Properties.Resources.B48x48_KGPG_Key2, strBannerTitle, strBannerDesc);
 			this.Icon = AppIcons.Default;
@@ -147,6 +153,10 @@ namespace KeePass.Forms
 			// m_cmbKeyFile.OrderedImageList = m_lKeyFileImages;
 			AddKeyFileSuggPriv(KPRes.NoKeyFileSpecifiedMeta, true);
 
+			// Enable protection before possibly setting a text
+			m_cbHidePassword.Checked = true;
+			OnCheckedHidePassword(sender, e); // 'Checked' may have been true already
+
 			// Do not directly compare with Program.CommandLineArgs.FileName,
 			// because this may be a relative path instead of an absolute one
 			string strCmdLineFile = Program.CommandLineArgs.FileName;
@@ -174,11 +184,11 @@ namespace KeePass.Forms
 				str = Program.CommandLineArgs[AppDefs.CommandLineOptions.PasswordStdIn];
 				if(str != null)
 				{
-					KcpPassword kcpPw = KeyUtil.ReadPasswordStdIn(true);
-					if(kcpPw != null)
+					ProtectedString ps = KeyUtil.ReadPasswordStdIn(true);
+					if(ps != null)
 					{
 						m_cbPassword.Checked = true;
-						m_tbPassword.TextEx = kcpPw.Password;
+						m_tbPassword.TextEx = ps;
 					}
 				}
 
@@ -196,9 +206,6 @@ namespace KeePass.Forms
 					AddKeyFileSuggPriv(str, true);
 				}
 			}
-
-			m_cbHidePassword.Checked = true;
-			OnCheckedHidePassword(sender, e);
 
 			Debug.Assert(m_cmbKeyFile.Text.Length != 0);
 
@@ -260,9 +267,9 @@ namespace KeePass.Forms
 		{
 			// Focusing doesn't always work in OnFormLoad;
 			// https://sourceforge.net/p/keepass/feature-requests/1735/
-			if(m_tbPassword.CanFocus) UIUtil.ResetFocus(m_tbPassword, this);
-			else if(m_cmbKeyFile.CanFocus) UIUtil.SetFocus(m_cmbKeyFile, this);
-			else if(m_btnOK.CanFocus) UIUtil.SetFocus(m_btnOK, this);
+			if(m_tbPassword.CanFocus) UIUtil.ResetFocus(m_tbPassword, this, true);
+			else if(m_cmbKeyFile.CanFocus) UIUtil.SetFocus(m_cmbKeyFile, this, true);
+			else if(m_btnOK.CanFocus) UIUtil.SetFocus(m_btnOK, this, true);
 			else { Debug.Assert(false); }
 		}
 
@@ -294,7 +301,11 @@ namespace KeePass.Forms
 			if(m_cbPassword.Checked) // Use a password
 			{
 				byte[] pb = m_tbPassword.TextEx.ReadUtf8();
-				try { m_pKey.AddUserKey(new KcpPassword(pb)); }
+				try
+				{
+					m_pKey.AddUserKey(new KcpPassword(pb,
+						Program.Config.Security.MasterPassword.RememberWhileOpen));
+				}
 				finally { MemUtil.ZeroByteArray(pb); }
 			}
 
